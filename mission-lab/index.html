@@ -1,0 +1,1085 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>마이크로비트·아두이노 실험실</title>
+<meta name="description" content="마이크로비트 센서, 팅커캐드 브레드보드, 아두이노 스마트 휴지통, 오류 대응 카드를 미션으로 체험하는 수업용 시뮬레이터">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+:root{color-scheme:light}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui,sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<style>
+/* Layout: 왼쪽은 실험대(가상 기기), 오른쪽은 미션 패널. 좁은 화면에서는 위아래로 쌓는다. */
+:root{
+  --bg:#e8eeec; --paper:#f8fbfa; --sunk:#eef3f1; --ink:#14232a; --muted:#53656c; --line:rgba(20,35,42,.13);
+  --accent:#007f89; --accent-ink:#ffffff; --soft:rgba(0,127,137,.10);
+  --ok:#2c8744; --bad:#c23131; --warn:#a86a00; --okbg:rgba(44,135,68,.10); --badbg:rgba(194,49,49,.09);
+  --display:'Black Han Sans','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --body:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --shadow:0 10px 30px -14px rgba(20,50,74,.35);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0e171b; --paper:#152026; --sunk:#1b2830; --ink:#e1eaec; --muted:#97a8ae; --line:rgba(225,234,236,.13);
+  --accent:#33bfc9; --accent-ink:#04262a; --soft:rgba(51,191,201,.14);
+  --ok:#55c472; --bad:#ff7070; --warn:#f0b445; --okbg:rgba(85,196,114,.13); --badbg:rgba(255,112,112,.12);
+  --shadow:0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0e171b; --paper:#152026; --sunk:#1b2830; --ink:#e1eaec; --muted:#97a8ae; --line:rgba(225,234,236,.13);
+  --accent:#33bfc9; --accent-ink:#04262a; --soft:rgba(51,191,201,.14);
+  --ok:#55c472; --bad:#ff7070; --warn:#f0b445; --okbg:rgba(85,196,114,.13); --badbg:rgba(255,112,112,.12);
+  --shadow:0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark }
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--body);word-break:keep-all;line-break:strict;-webkit-tap-highlight-color:transparent;overflow:hidden}
+*{box-sizing:border-box}
+button,select,input{font:inherit;color:inherit}
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px;padding-block:10px 6px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* 위 띠 */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.brand{display:grid;gap:2px;min-width:0}
+.eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.brand h1{margin:0;font:400 clamp(22px,2.4vw,30px)/1 var(--display);letter-spacing:.01em;text-wrap:balance}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 520px}
+.tab{flex:1 1 0;min-width:120px;min-height:52px;text-align:left;padding:7px 12px;border-radius:12px;border:1px solid var(--line);background:var(--paper);cursor:pointer;display:grid;gap:1px;touch-action:manipulation;user-select:none}
+.tab b{font-weight:700;font-size:15px}
+.tab small{font:500 11.5px/1.3 var(--mono);color:var(--muted);letter-spacing:.02em}
+.tab[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tab[aria-pressed="true"] small{color:inherit;opacity:.75}
+.tools{display:flex;gap:6px;align-items:center;margin-left:auto}
+.count{font:600 13px var(--mono);padding:0 12px;min-height:44px;display:flex;align-items:center;border-radius:999px;background:var(--soft);color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.btn{min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--paper);font-weight:600;font-size:14px;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .2s var(--ease),transform .15s var(--ease)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.btn.danger{background:var(--bad);color:#fff;border-color:transparent}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.sm{min-height:36px;padding:0 10px;font-size:13px;border-radius:10px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* 본문 */
+.work{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(340px,.88fr);gap:12px;min-height:0}
+.stage,.panel{background:var(--paper);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);min-height:0;overflow:auto;overscroll-behavior:contain}
+.stage{padding:14px;display:flex;flex-direction:column;gap:10px}
+.panel{padding:14px 16px 18px}
+.shead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.shead h2{margin:0;font:400 20px/1.1 var(--display)}
+.note{font:500 12px var(--mono);color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--sunk)}
+.seg button{min-height:40px;padding:0 12px;border:0;background:transparent;font-weight:600;font-size:13px;cursor:pointer;touch-action:manipulation}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.svgbox{display:flex;justify-content:center;min-height:0}
+.svgbox svg{width:100%;height:auto;max-height:min(56vh,520px);touch-action:manipulation;user-select:none}
+.svgt{font:600 13px var(--mono)}
+.svgs{font:600 11px var(--mono)}
+.readout{font:600 14px var(--mono);background:var(--sunk);border-radius:10px;padding:8px 12px;font-variant-numeric:tabular-nums;min-height:40px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.readout .k{color:var(--muted);font-weight:500}
+.ctrls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.ctrl{background:var(--sunk);border-radius:12px;padding:8px 10px;display:grid;gap:6px}
+.ctrl label,.ctrl .lab{font:600 12px var(--mono);color:var(--muted);letter-spacing:.04em;display:flex;justify-content:space-between;gap:8px}
+.ctrl .row{display:flex;gap:6px;flex-wrap:wrap}
+input[type=range]{width:100%;accent-color:var(--accent);min-height:30px}
+select.plain{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--paper);padding:0 8px}
+.warnbar{background:var(--badbg);color:var(--bad);border-radius:10px;padding:8px 12px;font-weight:600}
+.warnbar[hidden]{display:none}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap}
+.toolbar .btn{min-height:40px}
+
+/* 미션 패널 */
+.mlist{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.mchip{min-height:40px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--sunk);font-size:13px;font-weight:600;cursor:pointer;touch-action:manipulation;display:inline-flex;align-items:center;gap:6px}
+.mchip .mono{font:600 11.5px var(--mono);color:var(--muted)}
+.mchip.done{border-color:var(--ok);color:var(--ok)}
+.mchip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.mchip[aria-pressed="true"] .mono{color:inherit;opacity:.7}
+.mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.badge{font:600 11.5px/1 var(--mono);letter-spacing:.06em;padding:6px 9px;border-radius:999px;background:var(--soft);color:var(--accent)}
+.badge.ok{background:var(--okbg);color:var(--ok)}
+.mcard h2{margin:10px 0 4px;font:400 26px/1.1 var(--display);text-wrap:balance}
+.goal{margin:0 0 10px;font-weight:600;text-wrap:pretty}
+.todo{margin:0 0 12px;padding-left:20px;color:var(--muted);display:grid;gap:2px}
+.sec{font:600 11.5px var(--mono);letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin:14px 0 6px}
+.prog{display:grid;gap:8px;background:var(--sunk);border-radius:14px;padding:12px;overflow-x:auto}
+.crit{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.crit li{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;background:var(--sunk);font-weight:500}
+.crit li .ck{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:700;margin-top:1px}
+.crit li.ok{background:var(--okbg)}
+.crit li.ok .ck{background:var(--ok);border-color:var(--ok);color:#fff}
+.anynote{font-size:13px;color:var(--muted);margin:4px 0 0}
+.hint{margin-top:12px;display:grid;gap:8px}
+.hint p{margin:0;padding:10px 12px;border-radius:12px;background:var(--soft);font-weight:600}
+.mnav{display:flex;gap:8px;margin-top:16px}
+.mnav .btn{flex:1}
+.mnav .next{flex:2}
+
+/* 블록 (MakeCode·Codeblocks·엔트리 색) */
+.cblk{--c:#1E90FF;min-width:max-content}
+.cblk-h,.cblk-m{background:var(--c);color:#fff;font-weight:600;font-size:14px;padding:8px 10px;border-radius:10px 10px 10px 0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.cblk-m{border-radius:0 10px 10px 0;margin-top:0}
+.cblk-b{border-left:16px solid var(--c);padding:6px 0 6px 6px;display:grid;gap:6px}
+.cblk-f{background:var(--c);height:12px;width:96px;border-radius:0 10px 10px 10px}
+.blk{--c:#1E90FF;background:var(--c);color:#fff;font-weight:600;font-size:14px;padding:8px 10px;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:max-content}
+.pill{--c:#D400D4;background:var(--c);border:2px solid rgba(255,255,255,.55);border-radius:999px;padding:2px 10px;color:#fff;display:inline-flex;align-items:center;gap:6px}
+.slot{background:#fff;color:#14232a;border:0;border-radius:999px;min-height:32px;padding:0 10px;font:600 14px var(--mono);color-scheme:light}
+.slot.num{width:74px;text-align:center}
+.g5{display:grid;grid-template-columns:repeat(5,30px);gap:4px;padding:6px;background:#241717;border-radius:10px}
+.g5 button{width:30px;height:30px;border:0;border-radius:6px;background:#4a2f2f;cursor:pointer;padding:0;touch-action:manipulation}
+.g5 button.on{background:#ff3b2f;box-shadow:0 0 8px #ff3b2f}
+.g5.static button{cursor:default}
+.icons{display:flex;gap:4px;flex-wrap:wrap}
+.icons button{min-height:32px;border-radius:999px;border:0;padding:0 10px;background:rgba(255,255,255,.22);color:#fff;font-weight:600;font-size:13px;cursor:pointer}
+.code{font:500 13px/1.55 var(--mono);background:#13212a;color:#d7e6ea;border-radius:12px;padding:10px 12px;margin:0;overflow-x:auto;white-space:pre}
+.code .kw{color:#7cd7ff}.code .nm{color:#ffcf6b}.code .cm{color:#86a3ad}
+
+/* 표·선택지 */
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:left;vertical-align:middle}
+.tbl th{font:600 11.5px var(--mono);color:var(--muted);letter-spacing:.05em}
+.tbl td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tblwrap{overflow-x:auto}
+.exrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.exrow .fb{grid-column:1/-1;font-size:13px;font-weight:600}
+.fb.ok{color:var(--ok)} .fb.bad{color:var(--bad)}
+.choices{display:grid;gap:6px}
+.choice{min-height:48px;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--paper);font-weight:500;cursor:pointer;touch-action:manipulation}
+.choice.right{border-color:var(--ok);background:var(--okbg);font-weight:700}
+.choice.wrong{border-color:var(--bad);background:var(--badbg)}
+.explain{margin:8px 0 0;padding:10px 12px;border-radius:12px;font-weight:600}
+.explain.ok{background:var(--okbg);color:var(--ok)}
+.explain.bad{background:var(--badbg);color:var(--bad)}
+.measure{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center}
+.measure output{font:600 16px var(--mono);font-variant-numeric:tabular-nums}
+
+/* 오류 카드 실험대 */
+.ecard{border:1.5px solid var(--ink);border-radius:18px;padding:18px;display:grid;gap:10px;background:var(--paper);max-width:620px;margin:0 auto;width:100%}
+.ecard .q{font:400 clamp(20px,2.4vw,28px)/1.25 var(--display);margin:0;text-wrap:balance}
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;max-width:620px;margin:0 auto;width:100%}
+.flow div{background:var(--sunk);border-radius:12px;padding:8px;font-size:13px;display:grid;gap:2px}
+.flow b{font:600 11.5px var(--mono);color:var(--accent)}
+
+.guide{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center;background:var(--soft);border-radius:12px;padding:10px 12px}
+.guide svg{width:92px;height:auto}
+.guide p{margin:0;font-size:14px}
+.guide b{color:var(--accent)}
+.why{display:grid;gap:6px;background:var(--sunk);border-radius:14px;padding:12px 14px}
+.why p{margin:0;font-size:14px;text-wrap:pretty}
+.formula{font:600 15px/1.5 var(--mono);background:var(--ink);color:var(--paper);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums;overflow-x:auto}
+.vbar{display:flex;height:34px;border-radius:10px;overflow:hidden;font:600 12px var(--mono)}
+.vbar span{display:flex;align-items:center;justify-content:center;color:#fff;white-space:nowrap;padding:0 6px}
+.state{font-weight:700;padding:8px 12px;border-radius:10px}
+.state.ok{background:var(--okbg);color:var(--ok)} .state.bad{background:var(--badbg);color:var(--bad)} .state.warn{background:var(--soft);color:var(--warn)}
+.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;font:500 11.5px var(--mono);color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:var(--paper);padding:12px 18px;border-radius:14px;font-weight:600;max-width:min(560px,calc(100vw - 32px));text-align:center;transition:.35s var(--ease);z-index:20;box-shadow:var(--shadow)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.ok{background:var(--ok);color:#fff}
+
+@media (max-width:960px){
+  html,body{height:auto;overflow:auto}
+  .app{height:auto}
+  .work{grid-template-columns:minmax(0,1fr)}
+  .stage,.panel{overflow:visible}
+  .svgbox svg{max-height:none}
+}
+@media (max-width:640px){
+  .tab{min-width:calc(50% - 3px)}
+  .tools{margin-left:0;width:100%}
+  .flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mcard h2{font-size:23px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="eyebrow">Physical Computing Lab · 9–12차시</span>
+      <h1>마이크로비트·아두이노 실험실</h1>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="실험실 고르기"></nav>
+    <div class="tools">
+      <span class="count" id="count" aria-live="polite">완료 0/0</span>
+      <button class="btn sm" data-act="sound" id="soundBtn" aria-pressed="true">효과음 켜짐</button>
+      <button class="btn sm" data-act="resetall" id="resetBtn">처음부터</button>
+    </div>
+  </header>
+  <main class="work">
+    <section class="stage" id="stage" aria-label="실험대"></section>
+    <aside class="panel" id="panel" aria-label="미션"></aside>
+  </main>
+  <footer class="foot">
+    <span>시뮬레이터는 논리 확인용 교육용 단순 모델이에요. 실제 값은 기기에서 다시 재요.</span>
+    <span>경기도 기술교사 고태열 · 공학하는 기술쌤</span>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------- 데이터: LED 아이콘과 글꼴 ---------- */
+const bits = s => s.split('').map(Number);
+const ICONS = {
+  heart: bits('0101011111111110111000100'),
+  smile: bits('0000001010000001000101110'),
+  sad: bits('0000001010000000111010001'),
+  scissors: bits('1100111010001001101011001'),
+  rock: bits('0000001110011100111000000'),
+  paper: bits('1111111111111111111111111'),
+  all: bits('1111111111111111111111111'),
+  blank: bits('0000000000000000000000000')
+};
+const ICON_NAMES = {heart:'하트',smile:'웃음',sad:'슬픔',scissors:'가위',rock:'바위',paper:'보',blank:'빈 화면'};
+const FONT = {
+  '0':['.##.','#..#','#..#','#..#','.##.'], '1':['.#.','##.','.#.','.#.','###'],
+  '2':['###.','...#','.##.','#...','####'], '3':['###.','...#','.##.','...#','###.'],
+  '4':['..#.','.##.','#.#.','####','..#.'], '5':['####','#...','###.','...#','###.'],
+  '6':['.##.','#...','###.','#..#','.##.'], '7':['####','...#','..#.','.#..','.#..'],
+  '8':['.##.','#..#','.##.','#..#','.##.'], '9':['.##.','#..#','.###','...#','.##.'],
+  'H':['#..#','#..#','####','#..#','#..#'], 'O':['.##.','#..#','#..#','#..#','.##.'],
+  'T':['###','.#.','.#.','.#.','.#.'], 'I':['###','.#.','.#.','.#.','###'],
+  '?':['.##.','#..#','..#.','....','..#.'], '!':['#','#','#','.','#'],
+  '-':['...','...','###','...','...'], ' ':['..','..','..','..','..']
+};
+
+/* ---------- 데이터: 미션 내용 ---------- */
+const MB0 = [
+  {k:'led', name:'LED 화면 (5×5, 25개)', side:'front', ans:'both', tip:'LED 화면은 글자를 보여 주고(출력), 빛 밝기도 재요(입력).'},
+  {k:'a', name:'A 버튼', side:'front', ans:'in', tip:'누르면 신호를 보내요.'},
+  {k:'b', name:'B 버튼', side:'front', ans:'in', tip:'누르면 신호를 보내요.'},
+  {k:'logo', name:'터치 로고 (V2)', side:'front', ans:'in', tip:'손가락으로 만지면 신호가 돼요.'},
+  {k:'mic', name:'마이크 (V2)', side:'back', ans:'in', tip:'소리 크기를 0~255로 재요.'},
+  {k:'spk', name:'스피커 (V2)', side:'back', ans:'out', tip:'소리를 내보내요.'},
+  {k:'acc', name:'가속도·자력 센서', side:'back', ans:'in', tip:'흔들림·기울기·방향을 재요.'}
+];
+const SEATS = {window:{name:'창가 자리',base:186}, center:{name:'형광등 아래',base:118}, hall:{name:'복도 쪽 자리',base:42}};
+const CARDS = [
+  {t:'USB 인식 불가', who:'한 명', where:'마이크로비트 9차시', scene:'마이크로비트를 꽂았는데 MICROBIT 드라이브가 보이지 않아요. 뒷면 LED는 켜져요.',
+   q1:{q:'가장 먼저 확인할 것은?', o:['블록 코드를 처음부터 다시 만든다','데이터용 USB 케이블인지 보고, 다른 포트에 꽂아 본다','교사 확인 없이 펌웨어를 업데이트한다','마이크로비트를 새것으로 바꾼다'], a:1, ex:'충전 전용 케이블은 전원만 들어오고 데이터는 오가지 않아요. 케이블·포트처럼 눈에 보이는 연결부터 봐요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"케이블 바꾸면 돼요."','"이 케이블로 파일을 옮겨 본 적이 있나요? 다른 포트에도 꽂아 볼까요?"','"제가 할게요, 잠깐 비켜 볼래요?"'], a:1, ex:'답 대신 확인할 곳을 짚어 주는 질문이에요.'}},
+  {t:'페어링 실패', who:'한 명', where:'마이크로비트 9차시', scene:'[다운로드]를 눌렀는데 기기 연결 창에 보드가 보이지 않아요.',
+   q1:{q:'먼저 해 볼 일은?', o:['크롬·엣지로 다시 열고, MakeCode가 열린 다른 탭을 닫는다','교사 확인 없이 펌웨어를 업데이트한다','코드의 버튼 블록을 바꾼다','학교 PC 보안 설정을 끈다'], a:0, ex:'브라우저 종류와 다른 탭이 연결을 막는 경우가 많아요. 그래도 안 되면 .hex 파일을 MICROBIT 드라이브로 끌어다 놓아 수업을 이어 가요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"다른 탭에서도 MakeCode가 열려 있지 않은지 볼까요?"','"오늘은 그냥 시뮬레이터만 해요."','"제 노트북으로 할게요."'], a:0, ex:'학생이 직접 탭을 확인하게 하는 질문이에요.'}},
+  {t:'예전 프로그램이 실행됨', who:'한 명', where:'마이크로비트 9차시', scene:'다운로드했다는데 보드에서는 예전 프로그램이 계속 돌아가요.',
+   q1:{q:'먼저 확인할 것은?', o:['.hex 파일이 다운로드 폴더에만 있는지 보고 MICROBIT 드라이브로 복사한다','A 버튼 블록을 지운다','보드를 세게 흔든다','배터리 팩을 바꾼다'], a:0, ex:'.hex 파일이 보드로 옮겨지지 않으면 이전 프로그램이 그대로 실행돼요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"방금 받은 파일이 어디에 저장됐는지 함께 찾아볼까요?"','"다운로드 버튼을 다시 눌러요."','"보드가 고장 났네요."'], a:0, ex:'파일이 이동하는 경로를 스스로 따라가 보게 해요.'}},
+  {t:'버튼 무반응', who:'한 명', where:'MakeCode 9·10차시', scene:'A 버튼을 눌러도 아무 반응이 없어요. 블록 하나가 흐리게 보여요.',
+   q1:{q:'먼저 확인할 것은?', o:['흐린 블록이 이벤트 블록 안에 끼워졌는지 본다','USB 케이블을 바꾼다','리셋 버튼을 여러 번 누른다','새 프로젝트를 만든다'], a:0, ex:'어디에도 연결되지 않은 블록은 흐리게 보이고 실행되지 않아요. 시뮬레이터에서도 안 되면 코드 문제예요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"A 버튼 블록 안에 출력 블록이 딱 맞게 끼워졌는지 색으로 확인해 볼까요?"','"제가 블록 옮겨 줄게요."','"코드가 틀렸어요."'], a:0, ex:'볼 곳을 알려 주고 고치는 건 학생이 해요.'}},
+  {t:'교실에서 안 되는 자동 조명', who:'모둠', where:'마이크로비트 10차시', scene:'시뮬레이터에서는 잘 되던 자동 조명이 교실 자리에서는 늘 켜져 있어요.',
+   q1:{q:'먼저 해 볼 일은?', o:['빛 밝기를 숫자로 띄워 실제 값을 먼저 잰다','기준을 100으로 바꾼다','LED 출력 블록을 지운다','V2 보드로 바꾼다'], a:0, ex:'자리마다 밝기가 달라요. 밝을 때와 가렸을 때 값을 재서 그 사이로 기준을 정해요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"기준을 100으로 바꾸면 돼요."','"지금 자리에서 빛 값이 얼마나 나오는지 먼저 띄워 볼까요?"','"창가 자리로 옮기세요."'], a:1, ex:'숫자만 바꿔 주면 다른 자리에서 또 막혀요. 원인을 스스로 찾게 돕는 말이에요.'}},
+  {t:'LED가 터짐', who:'한 명', where:'Tinkercad 11차시', scene:'시뮬레이션을 시작하자마자 LED가 "퍽!" 하고 터졌어요.',
+   q1:{q:'먼저 확인할 것은?', o:['핀과 LED 사이에 보호 저항이 있는지, 값이 150Ω 이상인지 본다','대기 시간을 바꾼다','LED 색을 바꾼다','브라우저를 바꾼다'], a:0, ex:'빨간 LED는 약 2V·20mA 이하로 써요. 5V에서 남는 3V를 저항이 맡아야 하므로 옴의 법칙 R = V ÷ I = 3V ÷ 0.02A = 150Ω 이상이 필요해요. 수업에서는 여유를 두고 220Ω(약 13.6mA)을 써요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"전류를 줄여 주는 부품이 회로에 있나요? 있다면 몇 Ω인가요?"','"저항 넣으세요."','"LED가 불량이에요."'], a:0, ex:'부품의 역할과 값을 스스로 확인하게 하는 질문이에요. 계산은 [브레드보드 → Ω 보호 저항 계산] 미션에서 연습해요.'}},
+  {t:'LED가 안 켜짐', who:'한 명', where:'Tinkercad 11차시', scene:'회로도 코드도 다 했는데 LED가 켜지지 않아요. 코드는 13번 핀이에요.',
+   q1:{q:'먼저 확인할 것은?', o:['LED 긴 다리 방향과, 선이 꽂힌 핀 번호를 코드와 대조한다','저항을 뺀다','버튼을 하나 더 단다','코드를 처음부터 다시 짠다'], a:0, ex:'선(HW)을 먼저 보고 코드(SW)를 봐요. 극성 반대와 핀 번호 불일치가 가장 흔해요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"긴 다리는 어느 핀 쪽에 있나요? 블록의 핀 번호와 선의 핀도 짚어 볼까요?"','"LED 뒤집어요."','"제가 다시 꽂을게요."'], a:0, ex:'두 군데를 스스로 대조하게 해요.'}},
+  {t:'버튼을 눌러도 그대로', who:'한 명', where:'Tinkercad 11차시', scene:'버튼을 눌러도 LED가 바뀌지 않아요.',
+   q1:{q:'먼저 확인할 것은?', o:['버튼 두 다리가 서로 다른 열(가운데 홈 건너편)에 꽂혔는지 본다','LED를 하나 더 단다','10kΩ을 220Ω으로 바꾼다','대기 시간을 늘린다'], a:0, ex:'두 다리가 같은 열에 있으면 눌러도 연결이 바뀌지 않아요. 시뮬레이션이 실행 중인지도 봐요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"버튼 다리가 홈을 건너 꽂혔나요?"','"버튼이 고장이에요."','"예제를 다시 불러오세요."'], a:0, ex:'브레드보드 연결 규칙을 떠올리게 해요.'}},
+  {t:'거리 값이 0', who:'한 명', where:'아두이노 12차시', scene:'스마트 휴지통 뚜껑이 계속 열려 있어요. 거리 값은 0만 나와요.',
+   q1:{q:'먼저 확인할 것은?', o:['Trig·Echo 선이 9·10번에 맞게 꽂혔는지, 블록 핀 번호와 같은지 본다','서보를 새것으로 바꾼다','기준값을 0으로 바꾼다','엔트리를 다시 설치한다'], a:0, ex:'거리 값이 0이면 "거리 < 20"이 늘 참이라 뚜껑이 계속 열려요. 결선(HW)부터 확인해요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"Trig와 Echo 선이 코드와 같은 번호에 꽂혀 있는지 볼까요?"','"센서 고장이니 바꿔요."','"제가 선을 바꿔 꽂을게요."'], a:0, ex:'볼 곳만 짚고 확인은 학생이 해요.'}},
+  {t:'서보가 떨림', who:'한 명', where:'아두이노 12차시', scene:'서보가 180°까지 못 가고 떨려요. 가끔 보드가 멈춰요.',
+   q1:{q:'먼저 확인할 것은?', o:['서보 빨강·갈색 전원 선을 확인하고, 동시에 움직이는 부품을 줄인다','delay를 모두 지운다','LED를 더 단다','신호선을 아무 핀에나 바꿔 꽂아 본다'], a:0, ex:'서보는 움직일 때 전류가 커요. 해결되지 않으면 외부 전원은 교사에게 문의해요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"서보 빨강·갈색 선이 각각 어디에 꽂혀 있나요?"','"서보가 약해서 그래요."','"그냥 90°까지만 쓰세요."'], a:0, ex:'전원 선부터 따라가 보게 해요.'}},
+  {t:'부품이 뜨거움', who:'한 명', where:'아두이노 12차시 · 안전', scene:'USB를 꽂자마자 초음파 센서가 뜨거워지고 냄새가 나요.',
+   q1:{q:'가장 먼저 할 일은?', o:['즉시 USB를 뽑고 손을 떼게 한 뒤 교사에게 알린다','코드부터 확인한다','계속 실행하며 지켜본다','센서를 분해해 본다'], a:0, ex:'안전 위험이 보이면 진단보다 전원 차단이 먼저예요. 그다음 VCC·GND가 바뀌었는지 함께 봐요.'},
+   q2:{q:'학생에게 건넬 말로 알맞은 것은?', o:['"괜찮아요, 계속 해 봐요."','"지금 바로 USB를 뽑아요. 손 떼세요."','"뜨거우면 식혀서 써요."'], a:1, ex:'안전 상황에서는 짧고 분명하게 말해요.'}},
+  {t:'반 전체 연결 오류', who:'반 전체', where:'공통 · 튜터 역할', scene:'반 전체 노트북에서 엔트리 하드웨어 연결 프로그램이 실행되지 않아요.',
+   q1:{q:'먼저 할 일은?', o:['범위가 반 전체임을 확인하고 교사·정보 담당자에게 알린다','학생 PC에 프로그램을 임의로 설치한다','PC 보안 설정을 끈다','학생마다 케이블을 바꾼다'], a:0, ex:'반 전체 문제나 PC 설정 권한이 필요한 일은 튜터가 임의로 처리하지 않아요. 기록을 남겨 공유해요.'},
+   q2:{q:'교사에게 건넬 말로 알맞은 것은?', o:['"반 전체에서 같은 증상이에요. 시뮬레이터 활동으로 먼저 진행할지 정해 주시겠어요?"','"제가 관리자 권한으로 깔게요."','"오늘은 실습이 안 돼요."'], a:0, ex:'판단은 교사, 실행 지원은 튜터예요.'}}
+];
+
+/* ---------- 상태 ---------- */
+const S = {tab:'mb', cur:{mb:'mb0',bb:'bb1',tc:'tc1',err:'e1'}, done:new Set(), sound:true, hint:-1};
+try{ const sv = JSON.parse(localStorage.getItem('pclab-v1')||'{}'); if(sv.done) S.done = new Set(sv.done); if(sv.sound===false) S.sound=false; }catch(e){}
+function save(){ try{ localStorage.setItem('pclab-v1', JSON.stringify({done:[...S.done], sound:S.sound})); }catch(e){} }
+
+const z25 = () => Array(25).fill(0);
+const PROG = {
+  mb0:{},
+  mb1:{A:z25(), B:z25()},
+  mb2:{A:z25(), B:z25(), AB:z25()},
+  mb3:{bright:null, dark:null, th:''},
+  mb4:{op:'<', th:50},
+  mb5:{min:0, max:10},
+  mb6:{op:'≥', th:28, text:'더워요!', other:'smile'},
+  mb7:{th:30},
+  bb1:{quiz:null},
+  bb:{mode:'blink', out:13, wait:1, cond:'HIGH'},
+  bbR:{ans:'', why:null, color:'red', mA:20, pick:220},
+  tc:{th:20, angle:90, wait:2, repeat:false},
+  err:{}
+};
+const EV = {
+  mb1:{A:false,B:false}, mb2:{A:false,B:false,AB:false}, mb4:{on:false,off:false}, mb5:{n:0,last:[]},
+  mb6:{hot:false,cool:false}, mb7:{on:false,off:false},
+  bb1:{groups:new Set(), rail:false}, bb2:{on:false,off:false}, bb3:{burst:false,rev:false,fixed:false},
+  bbR:{burstR:false}, bb4:{on:false,off:false}, bb5:{a1:false,a0:false,b1:false,b0:false},
+  tc1:{edit:false}, tc3:{open:false,close:false}
+};
+const MB = {disp:z25(), scroll:null, mode:'sim', side:'front', hi:null, seat:'hall', cover:false, grip:false,
+  simLight:150, simTemp:24, simSound:20, light:150, temp:24, sound:20, chip:27, clapUntil:0, v2:true, lastF:0, warnedKo:false, warnedV1:false};
+const BB = {parts:[], tool:'look', pending:null, running:false, hi:null, pressed:false, t0:0, outHigh:false, pin2:null, res:null, sig:'', nid:1, armClear:false};
+const LEDV = {red:{n:'빨강',v:2.0}, yellow:{n:'노랑',v:2.1}, green:{n:'초록',v:2.2}, blue:{n:'파랑·흰색',v:3.2}};
+const TC = {w:{vcc:'',gnd:'',trig:'',echo:'',red:'',brown:'',orange:'',led:''}, table:true, usb:true, hot:false, running:false, once:false,
+  hand:35, reading:0, angle:0, target:0, led:false, holdUntil:0, recs:{}, sig:''};
+const TCW = [
+  ['vcc','초음파 VCC','5V','두 선이 바뀌면 센서가 뜨거워져요'], ['gnd','초음파 GND','GND','보드와 GND 공통 연결'],
+  ['trig','초음파 Trig','9','초음파를 보내는 선'], ['echo','초음파 Echo','10','돌아온 신호를 받는 선'],
+  ['red','서보 빨강','5V','전원(+)'], ['brown','서보 갈색','GND','갈색을 5V에 꽂지 않기'],
+  ['orange','서보 주황(신호)','6','블록의 핀 번호와 일치'], ['led','LED 긴 다리(+)','13','짧은 다리 → 220Ω → GND']
+];
+const TCOPT = [['','— 선택'],['5V','5V (+레일)'],['GND','GND (−레일)'],['9','디지털 9번'],['10','디지털 10번'],['6','디지털 6번'],['13','디지털 13번']];
+
+/* ---------- 소리 (Web Audio, 파일 없음) ---------- */
+let AC = null;
+function ac(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ AC=null; } } return AC; }
+function tone(f,d=.08,type='sine',v=.07,delay=0){
+  if(!S.sound) return; const c=ac(); if(!c) return;
+  const t=c.currentTime+delay, o=c.createOscillator(), g=c.createGain();
+  o.type=type; o.frequency.value=f; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+d+.03);
+}
+const SND = {
+  click:()=>tone(700,.05,'triangle',.05),
+  ok:()=>{tone(660,.12,'triangle',.07);tone(880,.12,'triangle',.07,.1);tone(1320,.22,'triangle',.06,.2);},
+  bad:()=>tone(170,.2,'square',.035),
+  pop:()=>{tone(120,.3,'sawtooth',.08);tone(60,.35,'square',.05,.03);}
+};
+
+/* ---------- 유틸 ---------- */
+const $ = id => document.getElementById(id);
+const rnd = (a,b) => a + Math.random()*(b-a);
+const eq = (a,b) => a.every((v,i)=>v===b[i]);
+function cmp(v,op,th){ th=Number(th); if(op==='<') return v<th; if(op==='>') return v>th; if(op==='≥') return v>=th; if(op==='≤') return v<=th; return false; }
+let toastT=0;
+function toast(msg, kind){ const t=$('toast'); t.textContent=msg; t.className='toast show'+(kind?' '+kind:''); clearTimeout(toastT); toastT=setTimeout(()=>t.className='toast',2800); }
+function getVal(path){ return path.split('.').reduce((o,k)=>o?.[k], PROG); }
+function setVal(path,v){ const ks=path.split('.'); const last=ks.pop(); const o=ks.reduce((o,k)=>o[k],PROG); o[last]=v; }
+
+/* ---------- 마이크로비트 런타임 ---------- */
+function setDisp(a){ MB.scroll=null; MB.disp=a.slice(); }
+function glyphCols(str){
+  const cols=[];
+  for(const ch of str){ const g=FONT[ch]||FONT['?']; const w=g[0].length; for(let x=0;x<w;x++) cols.push(g.map(r=>r[x]==='#'?1:0)); cols.push([0,0,0,0,0]); }
+  return cols;
+}
+function glyphCenter(ch){ const g=FONT[ch]||FONT['?']; const w=g[0].length, off=Math.floor((5-w)/2), d=z25(); g.forEach((r,y)=>{ for(let x=0;x<w;x++) if(r[x]==='#') d[y*5+x+off]=1; }); return d; }
+function showString(s){
+  s=String(s).toUpperCase();
+  if(s.length===1){ setDisp(glyphCenter(s)); return; }
+  const blank=[0,0,0,0,0];
+  MB.scroll={cols:[blank,blank,blank,blank,blank,...glyphCols(s),blank,blank,blank,blank], pos:0, t:0};
+  scrollFrame();
+}
+function scrollFrame(){ const sc=MB.scroll, d=z25(); for(let x=0;x<5;x++){ const c=sc.cols[sc.pos+x]||[0,0,0,0,0]; for(let y=0;y<5;y++) d[y*5+x]=c[y]; } MB.disp=d; }
+function mbSensors(now){
+  if(MB.mode==='sim'){ MB.light=MB.simLight; MB.temp=MB.simTemp; MB.sound=now<MB.clapUntil?255:MB.simSound; }
+  else{
+    MB.light = Math.max(0,Math.min(255, MB.cover ? rnd(12,21) : SEATS[MB.seat].base + rnd(-5,5)));
+    const target = 27 + (MB.grip?6:0); MB.chip += (target-MB.chip)*0.04; MB.temp = MB.chip;
+    MB.sound = now<MB.clapUntil ? rnd(210,245) : rnd(45,78);
+  }
+}
+function mbForever(id,now){
+  if(now-MB.lastF<130) return; MB.lastF=now;
+  const p=PROG[id];
+  if(id==='mb3'){ showString(String(Math.round(MB.light))); }
+  else if(id==='mb4'){ const on=cmp(MB.light,p.op,p.th); setDisp(on?ICONS.all:ICONS.blank);
+    if(MB.mode==='class'){ if(MB.cover&&on) EV.mb4.on=true; if(!MB.cover&&!on) EV.mb4.off=true; } }
+  else if(id==='mb6'){ const hot=cmp(Math.round(MB.temp),p.op,p.th);
+    if(hot){ showString(p.text); if(!/[^\x00-\x7F]/.test(p.text)) EV.mb6.hot=true; else if(!MB.warnedKo){ MB.warnedKo=true; toast('LED에 ? 가 흘러가요. 문자 출력에 어떤 글자를 넣었는지 볼까요?'); } }
+    else { setDisp(ICONS[p.other]); EV.mb6.cool=true; } }
+  else if(id==='mb7'){
+    if(!MB.v2){ setDisp(ICONS.sad); if(!MB.warnedV1){ MB.warnedV1=true; SND.bad(); toast('화면에 슬픈 얼굴이 떴어요. 뒷면에 마이크가 있는 보드인가요?'); } return; }
+    const on=MB.sound>Number(p.th); setDisp(on?ICONS.all:ICONS.blank); const clap=now<MB.clapUntil;
+    if(clap&&on) EV.mb7.on=true; if(!clap&&!on&&MB.mode==='class') EV.mb7.off=true; }
+}
+function mbTick(now){
+  mbSensors(now);
+  if(MB.scroll){ if(now-MB.scroll.t>115){ MB.scroll.t=now; MB.scroll.pos++; if(MB.scroll.pos>MB.scroll.cols.length-5) MB.scroll=null; else scrollFrame(); } }
+  else mbForever(S.cur.mb,now);
+  mbPaint();
+}
+function mbEvent(kind){
+  const id=S.cur.mb; SND.click();
+  if(id==='mb1' && (kind==='A'||kind==='B')){ const pat=PROG.mb1[kind]; setDisp(pat);
+    if(kind==='A' && eq(pat,ICONS.heart)) EV.mb1.A=true; if(kind==='B' && eq(pat,ICONS.blank)) EV.mb1.B=true; }
+  else if(id==='mb2' && PROG.mb2[kind]){ setDisp(PROG.mb2[kind]); EV.mb2[kind]=true; }
+  else if(id==='mb5' && kind==='SHAKE'){ const p=PROG.mb5; const lo=Math.min(p.min,p.max), hi=Math.max(p.min,p.max);
+    const n=Math.floor(rnd(lo,hi+1)); showString(String(n)); EV.mb5.last=[n,...EV.mb5.last].slice(0,6); if(p.min===1&&p.max===6) EV.mb5.n++; renderPanel(); }
+  else if(id==='mb0'){ /* 탐색만 */ }
+  else { toast('이 미션 프로그램에는 이 입력에 반응하는 블록이 없어요.'); }
+  check();
+}
+
+/* ---------- 브레드보드 회로 계산 (교육용 단순 모델) ---------- */
+const ROWS='abcdefghij';
+const PINS={P5V:{x:78,l:'5V',n:'5V'},PG1:{x:132,l:'GND',n:'GND'},PG2:{x:236,l:'GND',n:'GND'},P13:{x:290,l:'13',n:'D13'},P12:{x:344,l:'12',n:'D12'},P2:{x:470,l:'2',n:'D2'}};
+function epXY(ep){
+  if(PINS[ep]) return [PINS[ep].x,74];
+  const r=ep[0], c=+ep.slice(1), x=48+(c-1)*28;
+  if(r==='p') return [x,128]; if(r==='n') return [x,150];
+  const i=ROWS.indexOf(r); return [x, i<5 ? 188+i*22 : 314+(i-5)*22];
+}
+function baseNet(ep){ if(PINS[ep]) return PINS[ep].n; const r=ep[0], c=ep.slice(1); if(r==='p') return 'R+'; if(r==='n') return 'R-'; return (ROWS.indexOf(r)<5?'T':'B')+c; }
+const OHM_TXT={100:'100Ω',220:'220Ω',1000:'1kΩ',10000:'10kΩ'};
+const LED_VF=2.0, LED_MAX=0.022; /* 보드의 LED: 빨간색, 약 2V·20mA 기준 (교육용 단순 모델) */
+function solve(outPin, high){
+  const par={}; const f=x=>{ if(par[x]===undefined) par[x]=x; while(par[x]!==x){ par[x]=par[par[x]]; x=par[x]; } return x; };
+  const u=(a,b)=>{ a=f(a); b=f(b); if(a!==b) par[a]=b; };
+  for(const p of BB.parts) if(p.t==='wire') u(baseNet(p.a),baseNet(p.b));
+  const Sx=new Set([f('5V')]), Gx=new Set([f('GND')]);
+  (high?Sx:Gx).add(f('D'+outPin));
+  const short=[...Sx].some(x=>Gx.has(x));
+  const edges=[];
+  for(const p of BB.parts){ if(p.t==='res') edges.push([f(baseNet(p.a)),f(baseNet(p.b)),p.ohm]); if(p.t==='btn'&&BB.pressed) edges.push([f(baseNet(p.a)),f(baseNet(p.b)),0]); }
+  const dist=st=>{ const d=new Map(); st.forEach(s=>d.set(s,0)); let ch=true, guard=0; while(ch&&guard++<60){ ch=false; for(const [a,b,w] of edges){ for(const [x,y] of [[a,b],[b,a]]){ if(d.has(x)){ const nd=d.get(x)+w; if(!d.has(y)||nd<d.get(y)){ d.set(y,nd); ch=true; } } } } } return d; };
+  const dS=dist(Sx), dG=dist(Gx), leds={};
+  for(const p of BB.parts) if(p.t==='led'){
+    if(p.burst){ leds[p.id]={st:'burst',b:0}; continue; }
+    const A=f(baseNet(p.a)), K=f(baseNet(p.b)); let st='off', b=0;
+    if(short) st='off';
+    else if(A===K) st='same';
+    let tot=null, mA=0;
+    if(!short && A!==K && dS.has(A)&&dG.has(K)){ tot=dS.get(A)+dG.get(K); }
+    if(short) st='off';
+    else if(A===K) st='same';
+    else if(tot!==null){ const I = tot===0 ? Infinity : (5-LED_VF)/tot; mA=I*1000;
+      if(I>LED_MAX) st='burst'; else { st='on'; b=Math.min(1,Math.sqrt(I/0.0136)); } }
+    else if(dS.has(K)&&dG.has(A)) st='rev';
+    leds[p.id]={st,b,tot,mA};
+  }
+  const P=f('D2'), s0=dS.get(P), g0=dG.get(P); let pin2=null;
+  if(short) pin2=null; else if(s0===0) pin2=1; else if(g0===0) pin2=0;
+  else if(s0!==undefined&&g0!==undefined) pin2=s0<g0?1:0; else if(s0!==undefined) pin2=1; else if(g0!==undefined) pin2=0;
+  return {short,leds,pin2};
+}
+function bbTick(now){
+  if(!BB.running) return;
+  const p=PROG.bb; let high;
+  if(p.mode==='blink') high = Math.floor((now-BB.t0)/(p.wait*1000))%2===0;
+  else { const v=BB.pin2; high = v===null ? Math.random()<.5 : v===(p.cond==='HIGH'?1:0); }
+  BB.outHigh=high;
+  const res=solve(p.out,high); BB.pin2=res.pin2;
+  for(const q of BB.parts) if(q.t==='led' && res.leds[q.id]?.st==='burst' && !q.burst){ q.burst=true; q.burstTot=res.leds[q.id].tot; if(res.leds[q.id].tot>0) EV.bbR.burstR=true; SND.pop(); }
+  BB.res=res;
+  const sts=Object.values(res.leds), anyOn=sts.some(x=>x.st==='on');
+  if(p.mode==='blink'&&p.out===13){ if(high&&anyOn) EV.bb2.on=true; if(!high&&!anyOn&&EV.bb2.on) EV.bb2.off=true; }
+  if(sts.some(x=>x.st==='burst')) EV.bb3.burst=true;
+  if(sts.some(x=>x.st==='rev')) EV.bb3.rev=true;
+  if(EV.bb3.burst&&EV.bb3.rev&&anyOn) EV.bb3.fixed=true;
+  if(p.mode==='button'&&p.cond==='HIGH'){ if(BB.pressed&&res.pin2===1&&anyOn) EV.bb4.on=true; if(!BB.pressed&&res.pin2===0&&!anyOn) EV.bb4.off=true; }
+  if(p.out===12){ if(high&&anyOn) EV.bb5.a1=true; if(!high&&!anyOn&&EV.bb5.a1) EV.bb5.a0=true; }
+  if(p.mode==='button'&&p.cond==='LOW'){ if(!BB.pressed&&res.pin2===0&&anyOn) EV.bb5.b1=true; if(BB.pressed&&res.pin2===1&&!anyOn) EV.bb5.b0=true; }
+  const sig=JSON.stringify([res.leds,res.short,high,res.pin2,BB.pressed]);
+  if(sig!==BB.sig){ BB.sig=sig; drawBBInto(); bbRead(); check(); }
+}
+function bbStart(){
+  if(BB.running){ BB.running=false; for(const q of BB.parts) q.burst=false; BB.res=null; BB.pin2=null; BB.pressed=false; BB.sig=''; renderStage(); return; }
+  BB.running=true; BB.t0=performance.now(); BB.pending=null; BB.hi=null; BB.sig=''; SND.click(); renderStage();
+}
+function bbTap(ep){
+  if(BB.tool==='look'){ BB.hi=baseNet(ep); EV.bb1.groups.add(BB.hi); if(BB.hi==='R+'||BB.hi==='R-') EV.bb1.rail=true; SND.click(); drawBBInto(); check(); return; }
+  if(BB.running){ SND.bad(); toast('시뮬레이션 중에는 회로를 고칠 수 없어요. [시뮬레이션 중지]를 먼저 눌러요.'); return; }
+  if(BB.tool==='erase'){ const i=BB.parts.findIndex(q=>q.a===ep||q.b===ep); if(i>=0){ BB.parts.splice(i,1); SND.click(); drawBBInto(); } return; }
+  const occupied = !PINS[ep] && BB.parts.some(q=>q.a===ep||q.b===ep);
+  if(occupied && BB.pending!==ep){ SND.bad(); toast('이미 다리가 꽂힌 구멍이에요. 옆 구멍을 써요.'); return; }
+  if(!BB.pending){ BB.pending=ep; SND.click(); drawBBInto(); return; }
+  if(BB.pending===ep){ BB.pending=null; drawBBInto(); return; }
+  const a=BB.pending, b=ep; BB.pending=null;
+  if(BB.tool!=='wire' && (PINS[a]||PINS[b])){ SND.bad(); toast('부품 다리는 브레드보드 구멍에 꽂아요. 아두이노 핀과는 점퍼선으로 이어요.'); drawBBInto(); return; }
+  const t = BB.tool.startsWith('res') ? 'res' : BB.tool;
+  const part={id:BB.nid++, t, a, b};
+  if(t==='res') part.ohm = {res100:100,res220:220,res1k:1000,res10k:10000}[BB.tool];
+  if(t==='led') toast(`LED를 꽂았어요. 긴 다리(+)는 ${a}, 짧은 다리(−)는 ${b}에 있어요.`);
+  BB.parts.push(part); SND.click(); drawBBInto();
+}
+function bbPreset(){
+  BB.running=false; BB.pending=null; BB.parts=[]; BB.nid=1;
+  const add=(t,a,b,ohm)=>BB.parts.push({id:BB.nid++,t,a,b,ohm});
+  add('wire','P5V','p3'); add('wire','PG1','n4'); add('wire','p6','a6'); add('btn','e6','f6');
+  add('wire','j6','P2'); add('res','h6','h9',10000); add('wire','j9','n9');
+  add('wire','P13','a12'); add('res','c12','c14',220); add('led','e14','e16'); add('wire','a16','n16');
+}
+
+/* ---------- 스마트 휴지통 (엔트리 흐름의 교육용 단순 모델) ---------- */
+const tcSensorOk = () => TC.w.vcc==='5V'&&TC.w.gnd==='GND'&&TC.w.trig==='9'&&TC.w.echo==='10';
+const tcServoOk = () => TC.w.red==='5V'&&TC.w.brown==='GND'&&TC.w.orange==='6';
+const tcAllOk = () => TCW.every(([k,,a])=>TC.w[k]===a);
+function tcTick(now){
+  if(TC.running){
+    const p=PROG.tc, ok=tcSensorOk(), sv=tcServoOk();
+    if(p.repeat || !TC.once){
+      TC.once=true;
+      TC.reading = ok ? Math.max(0, TC.hand + rnd(-.6,.6)) : 0;
+      if(now>=TC.holdUntil){ const cond=TC.reading<Number(p.th); TC.target=cond?Number(p.angle):0; TC.led=cond; if(cond) TC.holdUntil=now+Number(p.wait)*1000; }
+    }
+    if(sv){ TC.angle += (TC.target-TC.angle)*0.28; if(Math.abs(TC.target-TC.angle)<.6) TC.angle=TC.target; }
+    if(p.repeat&&ok&&sv){
+      if(TC.hand<Number(p.th)-1 && TC.angle>Number(p.angle)-5) EV.tc3.open=true;
+      if(EV.tc3.open && TC.hand>Number(p.th)+1 && TC.angle<4 && now>=TC.holdUntil) EV.tc3.close=true;
+    }
+  }
+  const sig=[Math.round(TC.angle),TC.reading.toFixed(1),TC.led,TC.running,TC.hot,TC.usb,TC.hand].join('|');
+  if(sig!==TC.sig){ TC.sig=sig; drawTCInto(); tcRead(); check(); }
+}
+function tcRun(){
+  if(TC.running){ TC.running=false; TC.sig=''; renderStage(); return; }
+  if(!TC.usb){ SND.bad(); toast('아두이노가 연결되어 있지 않아요. USB를 먼저 연결해요.'); return; }
+  if(TC.hot){ SND.bad(); toast('부품이 뜨거운 상태예요. USB를 뽑고 결선을 다시 확인해요.'); return; }
+  TC.running=true; TC.once=false; TC.target=0; TC.holdUntil=0; TC.led=false; SND.click(); renderStage();
+}
+function tcUsb(){
+  if(TC.usb){ TC.usb=false; TC.running=false; TC.hot=false; SND.click(); toast('USB를 분리했어요. 이제 안전하게 결선해요.'); }
+  else{
+    TC.usb=true; SND.click();
+    if((TC.w.vcc==='GND'&&TC.w.gnd==='5V')||(TC.w.red==='GND'&&TC.w.brown==='5V')){ TC.hot=true; SND.bad(); toast('부품이 뜨거워져요! 즉시 USB를 뽑고 교사에게 알려요.'); }
+  }
+  renderStage(); renderPanel();
+}
+
+/* ---------- 블록 그리기 도우미 ---------- */
+const MC = {input:'#D400D4', basic:'#1E90FF', logic:'#00A4A6', math:'#9400D3', led:'#5C2D91'};
+const TK = {out:'#3a6fd8', ctrl:'#d9831a', inp:'#b04aa3'};
+const EN = {start:'#2aa53a', flow:'#1aa2db', hw:'#00a29d', judge:'#5266e0'};
+const cblk = (c,head,body) => `<div class="cblk" style="--c:${c}"><div class="cblk-h">${head}</div><div class="cblk-b">${body}</div><div class="cblk-f"></div></div>`;
+const ifelse = (c,head,a,b) => `<div class="cblk" style="--c:${c}"><div class="cblk-h">${head}</div><div class="cblk-b">${a}</div><div class="cblk-m">아니면</div><div class="cblk-b">${b}</div><div class="cblk-f"></div></div>`;
+const blk = (c,html) => `<div class="blk" style="--c:${c}">${html}</div>`;
+const pill = (c,t) => `<span class="pill" style="--c:${c}">${t}</span>`;
+function sel(path,opts,label,num){ const cur=getVal(path); return `<select class="slot" data-set="${path}" ${num?'data-num="1"':''} aria-label="${label}">${opts.map(o=>{ const [v,t]=Array.isArray(o)?o:[o,o]; return `<option value="${v}" ${String(cur)===String(v)?'selected':''}>${t}</option>`; }).join('')}</select>`; }
+function num(path,label,min,max){ return `<input class="slot num" type="number" inputmode="numeric" data-set="${path}" data-num="1" value="${getVal(path)}" min="${min}" max="${max}" aria-label="${label}">`; }
+function grid(path,picks){
+  const arr=getVal(path);
+  return `<div class="g5" role="group" aria-label="LED 5×5 칸">${arr.map((v,i)=>`<button class="${v?'on':''}" data-act="cell" data-path="${path}" data-i="${i}" aria-pressed="${!!v}" aria-label="${Math.floor(i/5)+1}행 ${i%5+1}열"></button>`).join('')}</div>`
+   + (picks?`<div class="icons">${picks.map(k=>`<button data-act="icon" data-path="${path}" data-k="${k}">${ICON_NAMES[k]}</button>`).join('')}</div>`:'');
+}
+const staticGrid = a => `<div class="g5 static" aria-hidden="true">${a.map(v=>`<button class="${v?'on':''}" tabindex="-1"></button>`).join('')}</div>`;
+function hl(code){ return code.replace(/\b(void|if|else)\b/g,'<span class="kw">$1</span>').replace(/\b(pinMode|digitalWrite|digitalRead|delay|setup|loop)\b/g,'<span class="nm">$1</span>'); }
+function arduinoCode(){
+  const p=PROG.bb;
+  if(p.mode==='blink') return `void setup() {\n  pinMode(${p.out}, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(${p.out}, HIGH);\n  delay(${p.wait*1000});\n  digitalWrite(${p.out}, LOW);\n  delay(${p.wait*1000});\n}`;
+  return `void setup() {\n  pinMode(2, INPUT);\n  pinMode(${p.out}, OUTPUT);\n}\n\nvoid loop() {\n  if (digitalRead(2) == ${p.cond}) {\n    digitalWrite(${p.out}, HIGH);\n  } else {\n    digitalWrite(${p.out}, LOW);\n  }\n}`;
+}
+function bbBlocks(){
+  const p=PROG.bb;
+  const mode=`<div class="seg" role="group" aria-label="프로그램 종류"><button data-act="bbmode" data-v="blink" aria-pressed="${p.mode==='blink'}">LED 깜빡이기</button><button data-act="bbmode" data-v="button" aria-pressed="${p.mode==='button'}">버튼으로 켜기</button></div>`;
+  const pinSel = sel('bb.out',[[13,'13'],[12,'12']],'출력 핀',true);
+  let b;
+  if(p.mode==='blink'){
+    const w=sel('bb.wait',[[1,'1'],[0.5,'0.5'],[0.2,'0.2']],'대기 시간',true);
+    b = blk(TK.out,`핀 ${pinSel} 을(를) <span class="pill" style="--c:${TK.out}">높음</span> 으로 설정`) + blk(TK.ctrl,`${w} 초 대기`)
+      + blk(TK.out,`핀 ${p.out} 을(를) <span class="pill" style="--c:${TK.out}">낮음</span> 으로 설정`) + blk(TK.ctrl,`${p.wait} 초 대기`);
+  } else {
+    b = ifelse(TK.ctrl,`만약 ${pill(TK.inp,'디지털 핀 2 읽기')} = ${sel('bb.cond',[['HIGH','높음'],['LOW','낮음']],'조건 값')} 이면`,
+      blk(TK.out,`핀 ${pinSel} 을(를) 높음 으로 설정`), blk(TK.out,`핀 ${p.out} 을(를) 낮음 으로 설정`));
+  }
+  return `<div>${mode}</div><div class="prog">${b}</div><div class="sec">블록+텍스트 · 아두이노 코드</div><pre class="code" id="bbcode">${hl(arduinoCode())}</pre>`;
+}
+
+/* ---------- 미션 정의 ---------- */
+const M = [];
+const def = m => M.push(m);
+const BTN_ROW = `<div class="row"><button class="btn sm" data-act="mbev" data-v="A">A</button><button class="btn sm" data-act="mbev" data-v="B">B</button><button class="btn sm" data-act="mbev" data-v="AB">A+B</button><button class="btn sm" data-act="mbev" data-v="SHAKE">SHAKE 흔들기</button></div>`;
+
+def({id:'mb0',tab:'mb',code:'1-1',part:'Part 1 · 9차시',title:'보드 탐험가',goal:'마이크로비트 부품을 찾아 입력과 출력으로 나눠요.',
+  todo:['부품 이름을 누르면 보드에 노란 테두리로 표시돼요.','뒷면 부품은 보드가 뒤집혀서 보여요.','입력(받는 것)·출력(보여 주는 것)·둘 다 중에서 골라요.'],
+  hints:['사람이 누르거나, 주변 정보를 받아들이는 부품은 무엇일까요?','LED 화면은 보여 주기만 할까요? 빛 센서는 보드의 어디에 있었죠?'],
+  ctrls:['side'], enter(){ MB.mode='sim'; setDisp(ICONS.smile); },
+  crit:[{t:'부품 7개를 모두 바르게 나눴어요', ok:()=>MB0.every(p=>PROG.mb0[p.k]===p.ans)}],
+  body(){ return `<div>${MB0.map(p=>{ const v=PROG.mb0[p.k]; const right=v===p.ans;
+    const b=(val,t)=>`<button class="btn sm" data-act="mb0" data-k="${p.k}" data-v="${val}" aria-pressed="${v===val}">${t}</button>`;
+    return `<div class="exrow"><button class="btn sm" data-act="mbhi" data-k="${p.k}" style="justify-content:flex-start">${p.name}</button><div class="row" style="display:flex;gap:4px">${b('in','입력')}${b('out','출력')}${b('both','둘 다')}</div>${v?`<div class="fb ${right?'ok':'bad'}">${right?'✓ '+p.tip:'다시 생각해 봐요. 이 부품은 무엇을 받거나 내보내나요?'}</div>`:''}</div>`; }).join('')}</div>`; }
+});
+def({id:'mb1',tab:'mb',code:'1-2',part:'Part 1 · 9차시',title:'A 버튼 → 하트',goal:'A 버튼을 누르면 하트, B 버튼을 누르면 빈 화면이 나오게 해요.',
+  todo:['A 버튼 블록의 LED 출력 칸을 눌러 하트를 그려요. 다시 누르면 꺼져요.','B 버튼 블록은 모든 칸을 비워 둬요.','가상 보드의 A·B 버튼을 눌러 확인해요.'],
+  hints:['A 버튼 블록 안의 LED 출력에 무엇이 그려져 있나요?','B 버튼을 눌렀을 때 화면이 정리되나요?'],
+  ctrls:['buttons'], enter(){ MB.mode='sim'; setDisp(ICONS.blank); },
+  crit:[{t:'A 버튼 블록에 하트를 그렸어요', ok:()=>eq(PROG.mb1.A,ICONS.heart)},{t:'A 버튼을 눌러 하트를 확인했어요', ok:()=>EV.mb1.A},{t:'B 버튼을 눌러 빈 화면을 확인했어요', ok:()=>EV.mb1.B}],
+  body(){ return `<div class="prog">${cblk(MC.input,'A 버튼을 눌렀을 때', blk(MC.basic,'LED 출력'+grid('mb1.A',['heart','smile','blank'])))}${cblk(MC.input,'B 버튼을 눌렀을 때', blk(MC.basic,'LED 출력'+grid('mb1.B',['blank'])))}</div>`; }
+});
+def({id:'mb2',tab:'mb',code:'2-2',part:'Part 2 · 10차시',title:'가위바위보',goal:'A = 가위, B = 바위, A+B = 보를 LED 출력으로 그려요.',
+  todo:['세 이벤트 블록에 서로 다른 모양을 그려요.','A+B는 두 버튼을 함께 누르는 입력이에요. [A+B] 버튼으로 확인해요.'],
+  hints:['세 버튼이 모두 다른 모양을 보여 주나요?','A+B 블록은 시뮬레이터에서 어떤 버튼으로 시험하나요?'],
+  ctrls:['buttons'], enter(){ MB.mode='sim'; setDisp(ICONS.blank); },
+  crit:[{t:'세 모양이 모두 그려졌고 서로 달라요', ok:()=>{ const {A,B,AB}=PROG.mb2; return [A,B,AB].every(x=>x.some(Boolean)) && !eq(A,B) && !eq(B,AB) && !eq(A,AB); }},
+        {t:'A, B, A+B를 모두 눌러 확인했어요', ok:()=>EV.mb2.A&&EV.mb2.B&&EV.mb2.AB}],
+  body(){ const r=['scissors','rock','paper','blank']; return `<div class="prog">${cblk(MC.input,'A 버튼을 눌렀을 때',blk(MC.basic,'LED 출력'+grid('mb2.A',r)))}${cblk(MC.input,'B 버튼을 눌렀을 때',blk(MC.basic,'LED 출력'+grid('mb2.B',r)))}${cblk(MC.input,'A+B 버튼을 눌렀을 때',blk(MC.basic,'LED 출력'+grid('mb2.AB',r)))}</div>`; }
+});
+def({id:'mb3',tab:'mb',code:'2-3',part:'Part 2 · 10차시',title:'값 먼저 보기',goal:'조건을 만들기 전에, 내 자리의 실제 빛 값을 숫자로 재요.',
+  todo:['실험대를 [교실 실제 값]으로 두고 내 자리를 골라요.','밝을 때 값, 앞면 LED를 손으로 덮었을 때 값을 적어요.','두 값의 중간쯤으로 기준값을 정해요.'],
+  hints:['지금 자리에서 빛 값이 얼마나 나오나요?','밝을 때 120, 가렸을 때 20이면 기준은 어디쯤이 좋을까요?'],
+  ctrls:['mode','light'], enter(){ MB.mode='class'; MB.cover=false; },
+  crit:[{t:'밝을 때 값을 적었어요', ok:()=>PROG.mb3.bright!==null},{t:'가렸을 때 값을 적었어요', ok:()=>PROG.mb3.dark!==null},
+        {t:'기준값을 두 값 사이로 정했어요', ok:()=>{ const p=PROG.mb3, t=Number(p.th); return p.bright!==null&&p.dark!==null&&p.th!==''&&t>p.dark&&t<p.bright; }}],
+  body(){ const p=PROG.mb3;
+    return `<div class="prog">${cblk(MC.basic,'무한반복 실행',blk(MC.basic,'숫자 출력 '+pill(MC.input,'빛 밝기')))}</div>
+    <div class="sec">기록 · ${SEATS[MB.seat].name}</div>
+    <div class="measure"><button class="btn sm" data-act="rec3" data-k="bright">밝을 때 값 적기</button><output>${p.bright??'—'}</output>
+    <button class="btn sm" data-act="rec3" data-k="dark">가렸을 때 값 적기</button><output>${p.dark??'—'}</output>
+    <label for="th3" style="font-weight:600">내가 정한 기준값</label><input id="th3" class="slot num" style="border:1px solid var(--line)" type="number" inputmode="numeric" data-set="mb3.th" data-num="1" value="${p.th}" min="0" max="255"></div>`; }
+});
+def({id:'mb4',tab:'mb',code:'2-4',part:'Part 2 · 10차시',title:'빛 센서 자동 조명',goal:'어두워지면 LED 25칸이 모두 켜지는 자동 조명을 만들어요.',
+  todo:['처음 기준값 50은 교재 예시예요. 복도 쪽 자리에서 그대로 될까요?','손으로 덮기를 켜고 끄며 교실 모드에서 시험해요.','안 되면 2-3처럼 값을 먼저 재고 기준을 고쳐요.'],
+  hints:['손을 떼도 불이 켜져 있다면, 지금 빛 값은 기준보다 큰가요 작은가요?','이 자리에서 밝을 때·가렸을 때 값은 각각 얼마였나요?'],
+  ctrls:['mode','light'], enter(){ MB.mode='class'; MB.cover=false; },
+  crit:[{t:'교실 모드에서 손으로 덮으면 켜져요', ok:()=>EV.mb4.on},{t:'교실 모드에서 손을 떼면 꺼져요', ok:()=>EV.mb4.off}],
+  body(){ return `<div class="prog">${cblk(MC.basic,'무한반복 실행', ifelse(MC.logic,`만약 ${pill(MC.input,'빛 밝기')} ${sel('mb4.op',['<','>','≥'],'비교')} ${num('mb4.th','기준값',0,255)} 이면`, blk(MC.basic,'LED 출력'+staticGrid(ICONS.all)), blk(MC.basic,'LED 출력'+staticGrid(ICONS.blank))))}</div>`; }
+});
+def({id:'mb5',tab:'mb',code:'2-5',part:'Part 2 · 10차시',title:'흔들림 주사위',goal:'흔들면 1~6 중 무작위 숫자가 나오는 주사위를 만들어요.',
+  todo:['무작위 수 블록의 기본 범위(0~10)를 확인해요.','범위를 주사위에 맞게 고쳐요.','[SHAKE 흔들기]를 세 번 이상 눌러 확인해요.'],
+  hints:['주사위 눈은 몇부터 몇까지인가요?','0이나 7이 나오면 어디를 고쳐야 할까요?'],
+  ctrls:['buttons'], enter(){ MB.mode='sim'; setDisp(ICONS.blank); },
+  crit:[{t:'무작위 범위를 1~6으로 정했어요', ok:()=>PROG.mb5.min===1&&PROG.mb5.max===6},{t:'1~6 범위로 세 번 이상 흔들어 확인했어요', ok:()=>EV.mb5.n>=3}],
+  body(){ return `<div class="prog">${cblk(MC.input,'흔들림 감지하면', blk(MC.basic,'숫자 출력 '+pill(MC.math,`무작위 수 ${num('mb5.min','최솟값',-10,99)} 부터 ${num('mb5.max','최댓값',-10,99)} 까지`)))}</div><p class="anynote">최근 결과: <b style="font-family:var(--mono)">${EV.mb5.last.join(', ')||'아직 없음'}</b></p>`; }
+});
+def({id:'mb6',tab:'mb',code:'2-6',part:'Part 2 · 10차시',title:'온도 경고',goal:'28℃ 이상이면 경고 문자를, 아니면 웃는 아이콘을 보여 줘요.',
+  todo:['처음에는 교재처럼 "더워요!"가 들어 있어요. 화면에 어떻게 보이는지 먼저 봐요.','온도를 올려(손으로 감싸 쥐기) 경고를 확인해요.','온도가 내려가면 웃는 아이콘이 나오는지 봐요.'],
+  hints:['LED에 ? 가 흘러간다면, 5×5 화면이 표시할 수 있는 글자는 무엇일까요?','교실 모드의 온도는 실내 온도와 왜 다를까요? (프로세서 칩 온도를 재요)'],
+  ctrls:['mode','temp'], enter(){ MB.mode='sim'; MB.warnedKo=false; },
+  crit:[{t:'문자 출력에 LED가 표시할 수 있는 글자를 넣었어요', ok:()=>!/[^\x00-\x7F]/.test(PROG.mb6.text)},{t:'더울 때 경고가 흘러가는 것을 확인했어요', ok:()=>EV.mb6.hot},{t:'평소에 웃는 아이콘을 확인했어요', ok:()=>EV.mb6.cool}],
+  body(){ return `<div class="prog">${cblk(MC.basic,'무한반복 실행', ifelse(MC.logic,`만약 ${pill(MC.input,'온도(℃)')} ${sel('mb6.op',['≥','>','<'],'비교')} ${num('mb6.th','기준 온도',-5,50)} 이면`, blk(MC.basic,'문자 출력 '+sel('mb6.text',['더워요!','HOT','HI'],'출력할 문자')), blk(MC.basic,'아이콘 출력 '+sel('mb6.other',[['smile','웃음'],['heart','하트']],'아이콘'))))}</div>`; }
+});
+def({id:'mb7',tab:'mb',code:'2-7',part:'Part 2 · 10차시 도전',title:'손뼉 라이트',goal:'손뼉을 치면 LED가 켜지고, 조용하면 꺼지게 해요.',
+  todo:['보드 버전(V1·V2)을 확인해요. 소리 블록은 V2 전용이에요.','교실은 늘 조금 시끄러워요. 조용할 때 소리 값부터 봐요.','손뼉 치기로 켜지는지, 조용할 때 꺼지는지 확인해요.'],
+  hints:['아무도 손뼉을 치지 않을 때 소리 값은 얼마쯤인가요?','기준값이 평소 소리보다 낮으면 어떤 일이 생길까요?'],
+  ctrls:['mode','ver','sound'], enter(){ MB.mode='class'; MB.warnedV1=false; },
+  crit:[{t:'V2 보드로 실행했어요', ok:()=>MB.v2},{t:'손뼉을 치면 켜져요', ok:()=>EV.mb7.on},{t:'교실 소음 속에서 조용할 때 꺼져요', ok:()=>EV.mb7.off}],
+  body(){ return `<div class="prog">${cblk(MC.basic,'무한반복 실행', ifelse(MC.logic,`만약 ${pill(MC.input,'소리 크기')} > ${num('mb7.th','기준값',0,255)} 이면`, blk(MC.basic,'LED 출력'+staticGrid(ICONS.all)), blk(MC.basic,'LED 출력'+staticGrid(ICONS.blank))))}</div>`; }
+});
+
+const LED_GUIDE = `<div class="guide"><svg viewBox="0 0 92 96" aria-hidden="true"><path d="M30 10 a16 16 0 0 1 32 0 v26 h-32z" fill="#e2483a"/><rect x="26" y="34" width="40" height="6" rx="2" fill="#c43a2e"/><line x1="62" y1="12" x2="62" y2="40" stroke="#fff" stroke-width="2" opacity=".7"/><line x1="38" y1="40" x2="38" y2="92" stroke="#8d969b" stroke-width="3"/><line x1="54" y1="40" x2="54" y2="74" stroke="#8d969b" stroke-width="3"/><text x="22" y="86" font-size="16" font-weight="700" fill="#c23131">+</text><text x="60" y="72" font-size="18" font-weight="700" fill="#2f62c9">−</text></svg>
+  <p><b>LED는 방향이 있어요.</b> 이 시뮬레이터에서는 <b>첫 번째로 누른 구멍에 긴 다리(+, 애노드)</b>, <b>두 번째로 누른 구멍에 짧은 다리(−, 캐소드)</b>가 꽂혀요. 긴 다리는 핀·저항 쪽, 짧은 다리는 GND 쪽이에요. 실물 LED는 다리를 자르면 길이로 구분이 어려우니, 몸체 테두리의 <b>평평한 쪽이 −</b>인 것도 함께 확인해요. 거꾸로 꽂았다면 [지우기]로 빼고 다시 꽂아요.</p></div>`;
+const BB_HOWTO = `<p class="anynote">도구를 고른 뒤 구멍 두 개를 차례로 눌러 꽂아요. <b>LED는 먼저 누른 구멍이 긴 다리(+), 나중에 누른 구멍이 짧은 다리(−)</b>예요. 보드에는 다리 옆에 빨간 +, 파란 − 표시가 붙어요. 점퍼선은 아두이노 핀 칸과도 이을 수 있어요.</p>`;
+def({id:'bb1',tab:'bb',code:'3-2',part:'Part 3 · 11차시',title:'연결 탐정',goal:'브레드보드 안쪽이 어떻게 이어져 있는지 눈으로 확인해요.',
+  todo:['도구에서 [연결 보기]를 골라요.','구멍을 누르면 안에서 함께 이어진 구멍이 노랗게 표시돼요.','세로 열, 가운데 홈 건너편, +·− 레일을 차례로 눌러 봐요.'],
+  hints:['a3을 누르면 어디까지 함께 표시되나요?','가운데 홈을 건너면 표시가 이어지나요?'],
+  ctrls:[], enter(){ BB.tool='look'; },
+  crit:[{t:'서로 다른 묶음을 3곳 이상 눌러 봤어요', ok:()=>EV.bb1.groups.size>=3},{t:'+ 또는 − 레일을 눌러 봤어요', ok:()=>EV.bb1.rail},{t:'홈 건너편 질문에 답했어요', ok:()=>PROG.bb1.quiz==='no'}],
+  body(){ const q=PROG.bb1.quiz; return `<div class="sec">질문</div><p style="margin:0 0 8px;font-weight:600">e3 구멍과 f3 구멍은 안에서 서로 이어져 있을까요?</p>
+    <div class="choices"><button class="choice ${q==='yes'?'wrong':''}" data-act="bb1q" data-v="yes">네, 같은 3번 열이라 이어져 있어요</button><button class="choice ${q==='no'?'right':''}" data-act="bb1q" data-v="no">아니요, 가운데 홈 건너편은 끊어져 있어요</button></div>
+    ${q?`<p class="explain ${q==='no'?'ok':'bad'}">${q==='no'?'맞아요. 홈을 기준으로 위(a~e)와 아래(f~j)는 따로예요. 버튼을 홈 건너편에 걸쳐 꽂는 이유예요.':'[연결 보기]로 e3과 f3을 각각 눌러 표시를 비교해 봐요.'}</p>`:''}`; }
+});
+def({id:'bb2',tab:'bb',code:'3-3',part:'Part 3 · 11차시',title:'첫 LED 회로와 깜빡이',goal:'13번 핀 → 220Ω 저항 → LED → GND 회로를 꽂고 1초 간격으로 깜빡여요.',
+  todo:['점퍼선: 13번 핀 → 브레드보드 한 열','저항 220Ω: 그 열 → 다른 열','LED: <b>먼저</b> 저항과 같은 열의 구멍(긴 다리 +), <b>다음에</b> 옆 열의 구멍(짧은 다리 −)을 눌러요.','LED 짧은 다리 열 → 점퍼선 → GND 핀(또는 − 레일), 그리고 [시뮬레이션 시작]'],
+  hints:['LED 긴 다리는 어느 쪽에 있나요? 저항과 같은 열인가요?','블록의 핀 번호와 선을 꽂은 핀 번호가 같은가요?'],
+  ctrls:[], enter(){ PROG.bb.mode='blink'; if(BB.tool==='look') BB.tool='wire'; },
+  crit:[{t:'13번 핀 회로에서 LED가 정상 밝기로 켜졌어요', ok:()=>EV.bb2.on},{t:'1초마다 꺼졌다 켜지는 것을 확인했어요', ok:()=>EV.bb2.off}],
+  body(){ return BB_HOWTO + `<div class="sec">Codeblocks</div>` + bbBlocks(); }
+});
+def({id:'bb3',tab:'bb',code:'3-5',part:'Part 3 · 11차시',title:'일부러 틀려 보기',goal:'가상 회로에서만 할 수 있는 실험이에요. 일부러 틀려 보고 원래대로 고쳐요.',
+  todo:['정상 회로에서 저항을 지우고 점퍼선으로 바로 이어 시뮬레이션해요.','LED를 반대로(짧은 다리를 핀 쪽으로) 꽂아 시뮬레이션해요.','시뮬레이션을 멈추고 원래대로 고쳐 다시 켜요.'],
+  hints:['저항이 없을 때 LED에 걸리는 전압은 얼마일까요? (LED는 2~3V로 동작해요)','남는 3V를 맡을 부품이 없으면 전류는 어떻게 될까요? Ω 미션에서 옴의 법칙으로 계산해 봐요.','긴 다리(+)와 짧은 다리(−)가 바뀌면 전류가 흐를까요?'],
+  ctrls:[], enter(){ PROG.bb.mode='blink'; },
+  crit:[{t:'저항 없이 연결해 LED가 터지는 것을 봤어요', ok:()=>EV.bb3.burst},{t:'LED를 반대로 꽂아 켜지지 않는 것을 봤어요', ok:()=>EV.bb3.rev},{t:'원래대로 고쳐 다시 켰어요', ok:()=>EV.bb3.fixed}],
+  body(){ return BB_HOWTO + `<p class="anynote">터진 LED는 시뮬레이션을 멈추면 다시 쓸 수 있어요. 실제 부품은 다시 쓸 수 없어요.</p><div class="sec">Codeblocks</div>` + bbBlocks(); }
+});
+def({id:'bbR',tab:'bb',code:'Ω',part:'Part 3 · 11차시 · 옴의 법칙',title:'보호 저항은 왜 220Ω?',short:'보호 저항 계산',goal:'LED에 알맞은 전류가 흐르도록, 옴의 법칙으로 보호 저항 값을 구해요.',
+  todo:['아래 설명을 읽고 계산기로 LED 색·목표 전류·저항을 바꿔 봐요.','확인 문제 두 개를 풀어요.','보드에서 220Ω 대신 100Ω을 꽂아 시뮬레이션해 봐요.'],
+  hints:['아두이노 핀은 5V를 내보내요. 빨간 LED가 쓰는 전압은 약 2V예요. 남는 전압은 누가 맡을까요?','옴의 법칙 V = I × R 을 R = V ÷ I 로 바꿔 쓸 수 있어요. 20mA는 몇 A일까요?','150Ω보다 작은 저항을 쓰면 전류는 20mA보다 커질까요, 작아질까요?'],
+  ctrls:[], enter(){ PROG.bb.mode='blink'; },
+  crit:[{t:'확인 문제 1: 최소 저항 150Ω을 구했어요', ok:()=>Number(PROG.bbR.ans)===150},{t:'확인 문제 2: 220Ω을 쓰는 까닭을 골랐어요', ok:()=>PROG.bbR.why===0},{t:'보드에서 100Ω 저항으로 LED가 과전류로 터지는 것을 확인했어요', ok:()=>EV.bbR.burstR}],
+  body(){ const p=PROG.bbR, L=LEDV[p.color], Vr=5-L.v, need=Vr/(p.mA/1000), I=Vr/p.pick*1000;
+    const st = I>22 ? ['bad',`위험: ${I.toFixed(1)}mA로 20mA를 넘어요. LED가 뜨거워지고 손상될 수 있어요.`] : I>=5 ? ['ok',`적당: ${I.toFixed(1)}mA로 20mA 이하라 알맞게 켜져요.`] : ['warn',`어두움: ${I.toFixed(1)}mA로 전류가 너무 작아 흐리게 켜져요.`];
+    const seg=(act,v,cur,t)=>`<button data-act="${act}" data-v="${v}" aria-pressed="${String(cur)===String(v)}">${t}</button>`;
+    const why=p.why;
+    return `<div class="why">
+      <p><b>① LED가 쓰는 전압과 전류</b> · 빨간 LED는 약 2V(파랑·흰색은 약 3V)에서 켜지고, 전류는 보통 <b>20mA 이하</b>로 써요. 정확한 값은 제품 데이터시트로 확인해요.</p>
+      <p><b>② 저항이 없으면</b> · 아두이노 핀의 5V가 LED에 바로 걸려요. LED는 쓰는 전압을 조금만 넘어도 전류가 크게 늘어서 과전류로 터져요.</p>
+      <p><b>③ 보호 저항의 역할</b> · 저항이 남는 전압(5V − 2V = 3V)을 나눠 맡아, LED에는 약 2V(3V 이하)만 걸리게 하고 회로 전류를 줄여요.</p>
+      <p><b>④ 옴의 법칙으로 계산</b> · V = I × R 이므로 R = V ÷ I 예요. 저항이 맡는 전압 3V를 전류 20mA(0.02A)로 나누면 150Ω이에요. 저항이 이보다 작으면 전류가 20mA를 넘으니 <b>150Ω 이상</b>이어야 해요.</p>
+      <p><b>⑤ 수업에서 220Ω을 쓰는 까닭</b> · 150Ω보다 커서 전류가 약 13.6mA로 여유가 있고, 쉽게 구하는 표준 저항값이에요. 330Ω(약 9mA)도 괜찮고, 1kΩ(약 3mA)이면 어둡게 켜져요.</p></div>
+    <div class="sec">옴의 법칙 계산기 · 전원 5V</div>
+    <div style="display:grid;gap:8px">
+      <div class="seg" role="group" aria-label="LED 색">${Object.entries(LEDV).map(([k,v])=>seg('rcolor',k,p.color,`${v.n} ${v.v}V`)).join('')}</div>
+      <div class="seg" role="group" aria-label="목표 전류">${[10,15,20].map(m=>seg('rma',m,p.mA,m+'mA')).join('')}</div>
+      <div class="formula">최소 저항 R = (5V − ${L.v.toFixed(1)}V) ÷ ${(p.mA/1000).toFixed(3)}A = ${Math.round(need)}Ω</div>
+      <div class="lab note">표준 저항 골라 보기</div>
+      <div class="seg" role="group" aria-label="저항 값">${[100,150,220,330,1000].map(r=>seg('rpick',r,p.pick,r>=1000?'1kΩ':r+'Ω')).join('')}</div>
+      <div class="vbar" aria-label="전압 나눔: 저항 ${Vr.toFixed(1)}V, LED ${L.v.toFixed(1)}V"><span style="width:${Vr/5*100}%;background:#8a6a2c">저항 ${Vr.toFixed(1)}V</span><span style="width:${L.v/5*100}%;background:#c23b2e">LED ${L.v.toFixed(1)}V</span></div>
+      <div class="formula">전류 I = (5V − ${L.v.toFixed(1)}V) ÷ ${p.pick}Ω = ${I.toFixed(1)}mA</div>
+      <div class="state ${st[0]}">${st[1]}</div>
+    </div>
+    <div class="sec">확인 문제 1</div>
+    <p style="margin:0 0 8px;font-weight:600">빨간 LED(약 2V)를 5V 핀에 연결해 20mA로 켜려고 해요. 보호 저항은 최소 몇 Ω이어야 할까요?</p>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:600"><input class="slot num" style="border:1px solid var(--line)" type="number" inputmode="numeric" data-set="bbR.ans" data-num="1" value="${p.ans}" aria-label="최소 저항 값"> Ω</label>
+    <div class="sec">확인 문제 2</div>
+    <p style="margin:0 0 8px;font-weight:600">계산값은 150Ω인데, 수업에서는 왜 220Ω을 쓸까요?</p>
+    <div class="choices">${['150Ω보다 커서 전류가 20mA보다 작아 여유가 있고, 쉽게 구하는 표준 값이라서','저항이 클수록 LED가 더 밝아져서','LED 보호 저항은 아무 값이나 써도 되어서'].map((o,j)=>`<button class="choice ${why===j?(j===0?'right':'wrong'):''}" data-act="rwhy" data-i="${j}">${o}</button>`).join('')}</div>
+    ${why!==null?`<p class="explain ${why===0?'ok':'bad'}">${why===0?'맞아요. 220Ω이면 (5−2)÷220 ≈ 13.6mA예요. 20mA보다 작아 LED가 오래가요.':'다시 생각해 봐요. 저항이 커지면 전류는 커질까요, 작아질까요? 계산기에서 확인해 봐요.'}</p>`:''}`; }
+});
+def({id:'bb4',tab:'bb',code:'3-7',part:'Part 3 · 11차시',title:'버튼 스위치',goal:'버튼을 누르면 LED가 켜지고, 떼면 꺼지게 해요.',
+  todo:['[Button 예제 불러오기]로 Tinkercad 예제와 같은 회로를 놓아요.','5V → 버튼 → 2번 핀, 2번 핀 쪽 열 → 10kΩ → GND 선을 따라가 봐요.','시뮬레이션 중에 [버튼 누르기]를 누르고 있어요.'],
+  hints:['10kΩ 저항을 지우면 2번 핀 값은 어떻게 될까요?','버튼 다리가 가운데 홈을 건너 꽂혔나요?'],
+  ctrls:['press'], enter(){ PROG.bb.mode='button'; PROG.bb.cond='HIGH'; },
+  crit:[{t:'버튼을 누르면 LED가 켜져요 (2번 핀 = 1)', ok:()=>EV.bb4.on},{t:'버튼을 떼면 LED가 꺼져요 (2번 핀 = 0)', ok:()=>EV.bb4.off}],
+  body(){ return `<button class="btn" data-act="preset" style="width:100%">Button 예제 불러오기</button>` + BB_HOWTO + `<div class="sec">Codeblocks</div>` + bbBlocks(); }
+});
+def({id:'bb5',tab:'bb',code:'3-8',part:'Part 3 · 11차시',title:'한 가지만 바꾸기',goal:'한 번에 하나만 바꾸고, 예상과 실제 결과를 비교해요.',
+  todo:['방법 ① LED 선을 12번 핀으로 옮기고, 블록 핀도 12로 바꿔 동작시켜요.','방법 ② 버튼 조건을 "낮음"으로 바꿔, 떼면 켜지고 누르면 꺼지게 해요.','바꾸기 전에 결과를 먼저 예상해 봐요.'],
+  hints:['선만 옮기고 블록 핀 번호를 그대로 두면 어떻게 될까요?','조건을 반대로 하면 버튼을 누르지 않았을 때 LED는?'],
+  ctrls:['press'], any:true, enter(){},
+  crit:[{t:'① 12번 핀으로 옮겨 켜고 꺼지는 것을 확인했어요', ok:()=>EV.bb5.a1&&EV.bb5.a0},{t:'② 조건을 반대로 바꿔 동작을 확인했어요', ok:()=>EV.bb5.b1&&EV.bb5.b0}],
+  body(){ return BB_HOWTO + `<div class="sec">Codeblocks</div>` + bbBlocks(); }
+});
+
+def({id:'tc1',tab:'tc',code:'4-1',part:'Part 4 · 12차시',title:'안전 결선',goal:'USB를 뺀 상태에서 연결표대로 결선하고, 그다음에 USB를 꽂아요.',
+  todo:['지금 USB가 꽂혀 있어요. 결선 전에 실험대 위쪽의 [USB 분리]부터 눌러요.','실험대 아래쪽 <b>회로 연결표</b>(12차시 교재와 같은 표)를 보며 아래 8개 선을 골라요.','짝과 한 줄씩 대조한 뒤 [USB 연결]을 눌러요.'],
+  hints:['USB가 꽂힌 채로 선을 옮기면 어떤 위험이 있을까요?','VCC·GND, 서보 빨강·갈색이 바뀌면 어떻게 될까요?'],
+  ctrls:['usb'], enter(){},
+  crit:[{t:'USB를 분리한 상태에서 결선했어요', ok:()=>EV.tc1.edit},{t:'8개 선이 연결표와 같아요', ok:tcAllOk},{t:'USB를 연결했고 뜨거워진 부품이 없어요', ok:()=>TC.usb&&!TC.hot&&tcAllOk()}],
+  body(){ return `<div class="tblwrap"><table class="tbl"><thead><tr><th>부품 · 핀</th><th>아두이노 연결</th><th>확인 포인트</th></tr></thead><tbody>${TCW.map(([k,n,,tip])=>`<tr><td>${n}</td><td><select class="plain" data-tcw="${k}" aria-label="${n} 연결">${TCOPT.map(([v,t])=>`<option value="${v}" ${TC.w[k]===v?'selected':''}>${t}</option>`).join('')}</select></td><td style="color:var(--muted);font-size:13px">${tip}</td></tr>`).join('')}</tbody></table></div>`; }
+});
+def({id:'tc2',tab:'tc',code:'4-5',part:'Part 4 · 12차시',title:'거리 측정 기록표',goal:'5·10·20·30cm에서 엔트리에 나온 값을 기록해요.',
+  todo:['USB 연결 후 [▶ 시작하기]를 눌러요.','각 줄의 [기록] 버튼을 누르면 손이 그 거리로 가서 값을 적어요.','값이 0이면 결선(HW)부터 다시 봐요.'],
+  hints:['실제 거리와 엔트리 값이 얼마나 비슷한가요?','값이 모두 0이라면 Trig·Echo 선은 어디에 꽂혀 있나요?'],
+  ctrls:['usb'], enter(){},
+  crit:[{t:'네 거리를 모두 기록했어요', ok:()=>[5,10,20,30].every(d=>TC.recs[d])},{t:'센서 값이 거리를 따라 바뀌어요 (0이 아님)', ok:()=>[5,10,20,30].every(d=>TC.recs[d]&&TC.recs[d].ok)}],
+  body(){ return `<div class="tblwrap"><table class="tbl"><thead><tr><th>실제 거리</th><th>엔트리 값</th><th>LED</th><th>서보</th><th></th></tr></thead><tbody>${[5,10,20,30].map(d=>{ const r=TC.recs[d]; return `<tr><td class="num">${d}cm</td><td class="num">${r?r.v:'—'}</td><td>${r?r.led:'—'}</td><td>${r?r.lid:'—'}</td><td><button class="btn sm" data-act="tcrec" data-d="${d}">기록</button></td></tr>`; }).join('')}</tbody></table></div><p class="anynote">기준값을 몇 cm로 정할지, 왜 그렇게 정할지 한 문장으로 적어 봐요.</p>`; }
+});
+def({id:'tc3',tab:'tc',code:'4-7',part:'Part 4 · 12차시',title:'스마트 휴지통',goal:'손이 가까우면 뚜껑이 열리고, 치우면 닫히는 휴지통을 완성해요.',
+  todo:['지금 프로그램에는 [계속 반복하기]가 빠져 있어요. 먼저 그대로 실행해 봐요.','계속 반복하기를 넣고, 기준 거리·열림 각도·기다리기를 정해요.','손을 기준보다 가까이·멀리 옮기며 시험해요.'],
+  hints:['시작할 때 한 번만 측정하면 손을 대도 반응할까요?','열린 뒤 기다리기가 0초면 뚜껑이 어떻게 움직일까요?'],
+  ctrls:['usb','hand'], enter(){},
+  crit:[{t:'계속 반복하기 안에 조건을 넣었어요', ok:()=>PROG.tc.repeat},{t:'손이 기준보다 가까우면 뚜껑이 열려요', ok:()=>EV.tc3.open},{t:'손을 치우면 뚜껑이 닫혀요', ok:()=>EV.tc3.close}],
+  body(){ const p=PROG.tc;
+    const ie = ifelse(EN.flow,`만약 ${pill(EN.hw,'초음파 Trig 9 · Echo 10 거리(cm)')} &lt; ${num('tc.th','기준 거리',2,50)} (이)라면`,
+      blk(EN.hw,`서보 6번 핀 ${sel('tc.angle',[[60,'60'],[90,'90'],[120,'120']],'열림 각도',true)}° 로 정하기`)+blk(EN.hw,'디지털 13번 핀 켜기')+blk(EN.flow,`${sel('tc.wait',[[0,'0'],[1,'1'],[2,'2']],'기다리기',true)} 초 기다리기`),
+      blk(EN.hw,'서보 6번 핀 0° 로 정하기')+blk(EN.hw,'디지털 13번 핀 끄기')) + blk(EN.flow,'0.1 초 기다리기');
+    return `<button class="btn" data-act="tcrepeat" style="width:100%">${p.repeat?'계속 반복하기 블록 빼기':'계속 반복하기 블록 넣기'}</button>
+    <div class="prog" style="margin-top:8px">${cblk(EN.start,'▶ 시작하기 버튼을 클릭했을 때', blk(EN.hw,'서보 6번 핀 0° 로 정하기') + (p.repeat ? cblk(EN.flow,'계속 반복하기', ie) : ie))}</div>`; }
+});
+CARDS.forEach((c,i)=>def({id:'e'+(i+1),tab:'err',code:'E'+(i+1),part:'오류 카드 · '+c.where,title:c.t,short:c.t,goal:'증상을 읽고 먼저 확인할 것과 건넬 말을 골라요.',
+  todo:[], hints:['한 명·모둠·반 전체 중 어디서 생긴 문제인가요?','눈에 보이는 연결(케이블·배선·전원)부터 봤나요?'], ctrls:[], enter(){}, card:c,
+  crit:[{t:'먼저 확인할 것을 골랐어요', ok:()=>(PROG.err['e'+(i+1)]||{}).q1===c.q1.a},{t:'학생 스스로 찾게 돕는 말을 골랐어요', ok:()=>(PROG.err['e'+(i+1)]||{}).q2===c.q2.a}],
+  body(){ const st=PROG.err[this.id]||{};
+    const q=(k,Q)=>{ const v=st[k]; return `<div class="sec">${k==='q1'?'질문 1':'질문 2'}</div><p style="margin:0 0 8px;font-weight:700">${Q.q}</p><div class="choices">${Q.o.map((o,j)=>`<button class="choice ${v===j?(j===Q.a?'right':'wrong'):''}" data-act="eans" data-q="${k}" data-i="${j}">${o}</button>`).join('')}</div>${v!==undefined?`<p class="explain ${v===Q.a?'ok':'bad'}">${v===Q.a?Q.ex:'다시 골라 봐요. 원인의 범위를 좁히는 순서를 떠올려 봐요.'}</p>`:''}`; };
+    return q('q1',c.q1)+q('q2',c.q2); }
+}));
+
+/* ---------- 화면 그리기 ---------- */
+const TABS = [['mb','마이크로비트','9·10차시 · MakeCode'],['bb','브레드보드','11차시 · Tinkercad'],['tc','스마트 휴지통','12차시 · 실물 결선'],['err','오류 카드','튜터 지원 · 문제 해결']];
+const curM = () => M.find(m=>m.id===S.cur[S.tab]);
+function renderHeader(){
+  $('tabs').innerHTML = TABS.map(([k,b,s])=>{ const n=M.filter(m=>m.tab===k), d=n.filter(m=>S.done.has(m.id)).length; return `<button class="tab" data-act="tab" data-v="${k}" aria-pressed="${S.tab===k}"><b>${b}</b><small>${s} · ${d}/${n.length}</small></button>`; }).join('');
+  $('count').textContent = `완료 ${S.done.size}/${M.length}`;
+  $('soundBtn').textContent = S.sound?'효과음 켜짐':'효과음 꺼짐'; $('soundBtn').setAttribute('aria-pressed',S.sound);
+}
+let critSig='';
+function renderPanel(){
+  const m=curM(), list=M.filter(x=>x.tab===S.tab), done=S.done.has(m.id);
+  const chips=list.map(x=>`<button class="mchip ${S.done.has(x.id)?'done':''}" data-act="mission" data-id="${x.id}" aria-pressed="${x.id===m.id}"><span class="mono">${x.code}</span>${x.short||x.title}${S.done.has(x.id)?' ✓':''}</button>`).join('');
+  const idx=list.indexOf(m);
+  $('panel').innerHTML = `<nav class="mlist" aria-label="미션 목록">${chips}</nav>
+  <article class="mcard">
+    <div class="mhead"><span class="badge">${m.code}</span><span class="note">${m.part}</span>${done?'<span class="badge ok">완료</span>':''}</div>
+    <h2>${m.title}</h2>
+    <p class="goal">${m.goal}</p>
+    ${m.todo.length?`<ol class="todo">${m.todo.map(t=>`<li>${t}</li>`).join('')}</ol>`:''}
+    <div id="mbody">${m.body()}</div>
+    <div class="sec">완료 기준${m.any?' · 둘 중 하나':''}</div>
+    <ul class="crit" id="crit"></ul>
+    <div class="hint"><button class="btn sm" data-act="hint">${S.hint<0?'막히면 힌트 질문 보기':'다음 힌트 질문 ('+(S.hint+1)+'/'+m.hints.length+')'}</button>${S.hint>=0?`<p>${m.hints[S.hint]}</p>`:''}</div>
+    <div class="mnav"><button class="btn" data-act="prev" ${idx===0&&S.tab==='mb'?'disabled':''}>◀ 이전</button><button class="btn primary next" data-act="next">다음 미션 ▶</button></div>
+  </article>`;
+  critSig=''; renderCrit();
+}
+function renderCrit(){
+  const m=curM(); const oks=m.crit.map(c=>!!c.ok());
+  const sig=m.id+oks.join(); if(sig===critSig) return; critSig=sig;
+  const el=$('crit'); if(el) el.innerHTML=m.crit.map((c,i)=>`<li class="${oks[i]?'ok':''}"><span class="ck" aria-hidden="true">${oks[i]?'✓':''}</span><span>${c.t}</span></li>`).join('');
+}
+function check(){
+  const m=curM(); renderCrit();
+  const oks=m.crit.map(c=>!!c.ok()); const pass = m.any ? oks.some(Boolean) : oks.every(Boolean);
+  if(pass && !S.done.has(m.id)){ S.done.add(m.id); save(); SND.ok(); toast(`미션 ${m.code} 완료! ${m.title}`,'ok'); renderHeader(); renderPanel(); }
+}
+
+/* 마이크로비트 실험대 */
+function mbSVG(){
+  const H=k=>MB.hi===k;
+  const box=(k,x,y,w,h)=>H(k)?`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="none" stroke="#ffd23f" stroke-width="3" stroke-dasharray="6 4"/>`:'';
+  let s=`<svg id="mbsvg" viewBox="0 0 340 272" role="img" aria-label="가상 마이크로비트 ${MB.side==='front'?'앞면':'뒷면'}">`;
+  s+=`<rect x="10" y="10" width="320" height="252" rx="22" fill="#1f2a32"/>`;
+  [['0',24,64],['1',96,64],['2',168,64],['3V',240,40],['GND',286,34]].forEach(([l,x,w])=>{ s+=`<rect x="${x}" y="226" width="${w}" height="30" rx="6" fill="#c9a44a"/><text x="${x+w/2}" y="246" text-anchor="middle" class="svgs" fill="#2b2210">${l}</text>`; });
+  if(MB.side==='front'){
+    s+=`<g data-part="logo"><path d="M150 40 q20 -16 40 0 q-20 16 -40 0z" fill="none" stroke="#c9a44a" stroke-width="3"/><circle cx="162" cy="40" r="3" fill="#c9a44a"/><circle cx="178" cy="40" r="3" fill="#c9a44a"/></g>${box('logo',140,26,60,28)}`;
+    s+=`<g id="leds">`; for(let i=0;i<25;i++){ const x=120+(i%5)*25, y=72+Math.floor(i/5)*28; s+=`<rect data-led="${i}" x="${x-4}" y="${y-8}" width="8" height="16" rx="2" fill="#3a2626"/>`; } s+=`</g>${box('led',104,56,132,140)}`;
+    [['A',30,'a'],['B',258,'b']].forEach(([l,x,k])=>{ s+=`<g data-mbbtn="${l}" style="cursor:pointer" role="button" aria-label="${l} 버튼"><rect x="${x}" y="98" width="52" height="52" rx="8" fill="#33414b"/><circle cx="${x+26}" cy="124" r="17" fill="#111" stroke="#5c6a74" stroke-width="2"/><text x="${x+26}" y="88" text-anchor="middle" font-size="18" font-weight="700" fill="#f0f4f6">${l}</text></g>${box(k,x-6,74,64,84)}`; });
+  } else {
+    s+=`<rect x="150" y="10" width="40" height="18" rx="3" fill="#aab4bb"/><text x="170" y="42" text-anchor="middle" class="svgs" fill="#cfd8dc">USB</text>`;
+    s+=`<rect x="264" y="18" width="34" height="20" rx="3" fill="#e6e6e6"/><text x="281" y="52" text-anchor="middle" class="svgs" fill="#cfd8dc">배터리</text>`;
+    s+=`<rect x="38" y="30" width="26" height="16" rx="3" fill="#555"/><text x="51" y="60" text-anchor="middle" class="svgs" fill="#cfd8dc">리셋</text>`;
+    s+=`<rect x="140" y="92" width="60" height="60" rx="6" fill="#0d1216"/><text x="170" y="126" text-anchor="middle" class="svgs" fill="#9fb0b8">프로세서</text><text x="170" y="168" text-anchor="middle" class="svgs" fill="#cfd8dc">온도 측정</text>`;
+    s+=`<rect x="56" y="100" width="56" height="40" rx="5" fill="#0d1216"/><text x="84" y="158" text-anchor="middle" class="svgs" fill="#cfd8dc">가속도·자력</text>${box('acc',48,92,72,76)}`;
+    s+=`<circle cx="240" cy="78" r="9" fill="#0d1216" stroke="#888"/><circle cx="240" cy="78" r="2" fill="#000"/><text x="240" y="104" text-anchor="middle" class="svgs" fill="#cfd8dc">마이크</text>${box('mic',218,62,44,50)}`;
+    s+=`<circle cx="262" cy="148" r="22" fill="#0d1216" stroke="#666"/><circle cx="262" cy="148" r="12" fill="#222"/><text x="262" y="188" text-anchor="middle" class="svgs" fill="#cfd8dc">스피커</text>${box('spk',234,120,56,74)}`;
+    if(!MB.v2) s+=`<text x="170" y="210" text-anchor="middle" class="svgs" fill="#ffb4a8">V1: 마이크·스피커 없음</text>`;
+  }
+  return s+'</svg>';
+}
+function mbPaint(){
+  if(S.tab!=='mb') return;
+  document.querySelectorAll('#mbsvg [data-led]').forEach(el=>{ const on=MB.disp[+el.dataset.led]; el.setAttribute('fill',on?'#ff3b2f':'#3a2626'); el.style.filter=on?'drop-shadow(0 0 3px #ff3b2f)':''; });
+  const r=$('mbread'); if(!r) return;
+  const id=S.cur.mb; let t='';
+  if(['mb3','mb4'].includes(id)) t=`<span class="k">빛 밝기</span> ${Math.round(MB.light)} <span class="k">/ 255</span>`;
+  else if(id==='mb6') t=`<span class="k">온도</span> ${Math.round(MB.temp)}℃ ${MB.mode==='class'?'<span class="k">(프로세서 칩 기준)</span>':''}`;
+  else if(id==='mb7') t=`<span class="k">소리 크기</span> ${Math.round(MB.sound)} <span class="k">/ 255</span>`;
+  else if(id==='mb5') t=`<span class="k">흔든 횟수(1~6 범위)</span> ${EV.mb5.n}`;
+  else t=`<span class="k">출력 창</span> 버튼과 센서를 조작해 보세요`;
+  if(MB.mode==='class'&&['mb3','mb4','mb7'].includes(id)) t+=` <span class="k">· ${SEATS[MB.seat].name}${MB.cover?' · 손으로 덮음':''}</span>`;
+  r.innerHTML=t;
+}
+function mbStage(){
+  const m=curM(), c=m.ctrls;
+  const seg=(act,v,cur,t)=>`<button data-act="${act}" data-v="${v}" aria-pressed="${cur===v}">${t}</button>`;
+  let ctr='';
+  if(c.includes('buttons')) ctr+=`<div class="ctrl"><span class="lab">입력 버튼</span>${BTN_ROW}</div>`;
+  if(c.includes('light')) ctr+= MB.mode==='sim'
+    ? `<div class="ctrl"><label for="simL">빛 밝기 조절 <span>${MB.simLight}</span></label><input id="simL" type="range" min="0" max="255" value="${MB.simLight}" data-mb="simLight"></div>`
+    : `<div class="ctrl"><span class="lab">교실 자리</span><select class="plain" data-act-change="seat" aria-label="교실 자리">${Object.entries(SEATS).map(([k,v])=>`<option value="${k}" ${MB.seat===k?'selected':''}>${v.name}</option>`).join('')}</select><button class="btn sm" data-act="cover" aria-pressed="${MB.cover}">${MB.cover?'손 떼기':'손으로 앞면 LED 덮기'}</button></div>`;
+  if(c.includes('temp')) ctr+= MB.mode==='sim'
+    ? `<div class="ctrl"><label for="simT">온도 조절 <span>${MB.simTemp}℃</span></label><input id="simT" type="range" min="-5" max="50" value="${MB.simTemp}" data-mb="simTemp"></div>`
+    : `<div class="ctrl"><span class="lab">온도</span><button class="btn sm" data-act="grip" aria-pressed="${MB.grip}">${MB.grip?'손 떼기':'손으로 감싸 쥐기'}</button></div>`;
+  if(c.includes('sound')) ctr+= `<div class="ctrl">${MB.mode==='sim'?`<label for="simS">소리 크기 조절 <span>${MB.simSound}</span></label><input id="simS" type="range" min="0" max="255" value="${MB.simSound}" data-mb="simSound">`:'<span class="lab">소리 · 교실 소음 45~78</span>'}<button class="btn sm" data-act="clap">손뼉 치기 👏</button></div>`;
+  $('stage').innerHTML = `<div class="shead"><h2>가상 마이크로비트</h2>
+    ${c.includes('mode')?`<div class="seg" role="group" aria-label="값의 출처">${seg('mbmode','sim',MB.mode,'가상 시뮬레이터')}${seg('mbmode','class',MB.mode,'교실 실제 값')}</div>`:''}
+    ${c.includes('side')||S.cur.mb==='mb0'?`<div class="seg" role="group" aria-label="보는 면">${seg('side','front',MB.side,'앞면')}${seg('side','back',MB.side,'뒷면')}</div>`:''}
+    ${c.includes('ver')||S.cur.mb==='mb0'?`<div class="seg" role="group" aria-label="보드 버전">${seg('ver','v1',MB.v2?'v2':'v1','V1')}${seg('ver','v2',MB.v2?'v2':'v1','V2')}</div>`:''}</div>
+    <div class="svgbox">${mbSVG()}</div>
+    <div class="readout" id="mbread" aria-live="off"></div>
+    ${ctr?`<div class="ctrls">${ctr}</div>`:''}`;
+  mbPaint();
+}
+
+/* 브레드보드 실험대 */
+function wireColor(p){ const n=[baseNet(p.a),baseNet(p.b)]; if(n.includes('5V')||n.includes('R+')) return '#d23b3b'; if(n.includes('GND')||n.includes('R-')) return '#222b30'; return '#e8890c'; }
+function bbSVG(){
+  const R=BB.res||{leds:{},short:false};
+  let s=`<svg id="bbsvg" viewBox="0 0 544 426" role="img" aria-label="가상 아두이노와 브레드보드">`;
+  s+=`<rect x="30" y="6" width="484" height="88" rx="10" fill="#0e7c86"/><text x="44" y="28" class="svgt" fill="#e8fbfc">Arduino Uno R3</text>`;
+  s+=`<rect x="188" y="17" width="14" height="9" rx="2" fill="${BB.running?'#7dff6a':'#245a3c'}"/><text x="206" y="26" class="svgs" fill="#e8fbfc">ON</text>`;
+  const L=BB.running&&PROG.bb.out===13&&BB.outHigh;
+  s+=`<rect x="300" y="17" width="14" height="9" rx="2" fill="${L?'#ffb000':'#5a4a20'}"/><text x="318" y="26" class="svgs" fill="#e8fbfc">L (13번)</text>`;
+  s+=`<text x="405" y="64" class="svgs" fill="#bfe9ec">… 11~3 …</text><text x="104" y="40" text-anchor="middle" class="svgs" fill="#bfe9ec">전원</text><text x="360" y="40" text-anchor="middle" class="svgs" fill="#bfe9ec">디지털</text>`;
+  for(const [k,p] of Object.entries(PINS)){ const pend=BB.pending===k, hi=BB.hi&&BB.hi===p.n;
+    s+=`<g data-ep="${k}" style="cursor:pointer" role="button" aria-label="${p.l} 핀"><rect x="${p.x-22}" y="44" width="44" height="34" rx="6" fill="#16202a" stroke="${pend?'#ffd23f':hi?'#ffb000':'#0b5f66'}" stroke-width="${pend||hi?3:1}"/><text x="${p.x}" y="66" text-anchor="middle" class="svgt" fill="#f4f7f8">${p.l}</text></g>`; }
+  s+=`<rect x="30" y="104" width="484" height="316" rx="8" fill="#f1f1eb" stroke="#d6d6cc"/>`;
+  s+=`<line x1="42" y1="117" x2="502" y2="117" stroke="#d23b3b" stroke-width="2"/><line x1="42" y1="161" x2="502" y2="161" stroke="#2f62c9" stroke-width="2"/>`;
+  s+=`<text x="35" y="132" class="svgs" fill="#d23b3b">+</text><text x="35" y="154" class="svgs" fill="#2f62c9">−</text>`;
+  s+=`<rect x="30" y="291" width="484" height="12" fill="#dcdcd2"/>`;
+  for(let c=1;c<=17;c++) s+=`<text x="${48+(c-1)*28}" y="176" text-anchor="middle" font-size="9" font-family="IBM Plex Mono,monospace" fill="#8a8a80">${c}</text>`;
+  for(let i=0;i<10;i++){ const [,y]=epXY(ROWS[i]+'1'); s+=`<text x="34" y="${y+4}" font-size="10" font-family="IBM Plex Mono,monospace" fill="#8a8a80">${ROWS[i]}</text>`; }
+  const used=new Set(); BB.parts.forEach(q=>{used.add(q.a);used.add(q.b);});
+  const hole=ep=>{ const [x,y]=epXY(ep), on=BB.hi&&baseNet(ep)===BB.hi, pend=BB.pending===ep;
+    return `<g data-ep="${ep}" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="12" fill="transparent"/>${on?`<circle cx="${x}" cy="${y}" r="9" fill="#ffd23f" opacity=".85"/>`:''}<circle cx="${x}" cy="${y}" r="5" fill="${used.has(ep)?'#1d1d1d':'#5a5e60'}"/>${pend?`<circle cx="${x}" cy="${y}" r="10" fill="none" stroke="#007f89" stroke-width="3"/>`:''}</g>`; };
+  for(let c=1;c<=17;c++){ s+=hole('p'+c)+hole('n'+c); for(const r of ROWS) s+=hole(r+c); }
+  const order={res:0,btn:1,led:2,wire:3};
+  [...BB.parts].sort((a,b)=>order[a.t]-order[b.t]).forEach(p=>{
+    const [x1,y1]=epXY(p.a),[x2,y2]=epXY(p.b), mx=(x1+x2)/2, my=(y1+y2)/2;
+    if(p.t==='wire'){ const cy=Math.min(y1,y2)-26; s+=`<path data-part="${p.id}" d="M${x1} ${y1} Q${mx} ${cy} ${x2} ${y2}" fill="none" stroke="${wireColor(p)}" stroke-width="4.5" stroke-linecap="round" opacity=".92"/>`; }
+    else if(p.t==='res'){ const ang=Math.atan2(y2-y1,x2-x1)*180/Math.PI; const bands={100:['#7a4a1d','#111','#7a4a1d'],220:['#d22','#d22','#7a4a1d'],1000:['#7a4a1d','#111','#d22'],10000:['#7a4a1d','#111','#f08a00']}[p.ohm];
+      s+=`<g data-part="${p.id}"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#9aa0a4" stroke-width="2"/><g transform="translate(${mx} ${my}) rotate(${ang})"><rect x="-15" y="-6" width="30" height="12" rx="5" fill="#dcbf8f"/>${bands.map((b,i)=>`<rect x="${-9+i*6}" y="-6" width="3" height="12" fill="${b}"/>`).join('')}</g><text x="${mx}" y="${my-10}" text-anchor="middle" font-size="10" font-weight="700" font-family="IBM Plex Mono,monospace" fill="#5b4520">${OHM_TXT[p.ohm]}</text></g>`; }
+    else if(p.t==='btn'){ s+=`<g data-part="${p.id}" data-press="1" style="cursor:pointer"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#9aa0a4" stroke-width="2"/><rect x="${mx-12}" y="${my-12}" width="24" height="24" rx="4" fill="#2c3237"/><circle cx="${mx}" cy="${my}" r="${BB.pressed?6:8}" fill="${BB.pressed?'#8a1f1f':'#d33'}"/></g>`; }
+    else if(p.t==='led'){ const st=(R.leds[p.id]||{}).st||'off', b=(R.leds[p.id]||{}).b||0; const bx=mx, by=Math.min(y1,y2)-16;
+      s+=`<g data-part="${p.id}"><line x1="${x1}" y1="${y1}" x2="${bx-3}" y2="${by+6}" stroke="#9aa0a4" stroke-width="2.4"/><line x1="${x2}" y1="${y2}" x2="${bx+3}" y2="${by+6}" stroke="#9aa0a4" stroke-width="1.6"/>`;
+      if(st==='on') s+=`<circle cx="${bx}" cy="${by}" r="${12+10*b}" fill="#ff5a3c" opacity="${.18+.3*b}"/>`;
+      s+=`<circle cx="${bx}" cy="${by}" r="9" fill="${st==='burst'?'#4a4a4a':st==='on'?`rgb(255,${Math.round(110-50*b)},${Math.round(70-40*b)})`:'#a8433a'}"/>`;
+      if(st==='burst') s+=`<text x="${bx}" y="${by-14}" text-anchor="middle" font-size="12" font-weight="700" fill="#c23131">퍽!</text>`;
+      s+=`<text x="${x1}" y="${y1+19}" text-anchor="middle" font-size="12" font-weight="700" fill="#c23131">+</text><text x="${x2}" y="${y2+19}" text-anchor="middle" font-size="13" font-weight="700" fill="#2f62c9">−</text></g>`; }
+  });
+  return s+'</svg>';
+}
+function drawBBInto(){ const b=$('bbbox'); if(b) b.innerHTML=bbSVG(); bbRead(); }
+function bbRead(){
+  const r=$('bbread'); if(!r) return; const p=PROG.bb;
+  if(!BB.running){
+    const step = BB.tool==='led' ? (BB.pending?'이제 <b>짧은 다리(−, 캐소드)</b>를 꽂을 구멍을 눌러요':'먼저 <b>긴 다리(+, 애노드)</b>를 꽂을 구멍을 눌러요')
+      : BB.pending ? '두 번째 구멍(또는 핀)을 눌러요' : '';
+    r.innerHTML=`<span class="k">상태</span> 시뮬레이션 멈춤 · 부품 ${BB.parts.length}개 ${step?'<span class="k">·</span> '+step:''}`; }
+  else { const p2=BB.pin2===null?'떠 있음(값이 계속 바뀜)':BB.pin2;
+    const cur=Object.values(BB.res?.leds||{}).filter(x=>x.st==='on').map(x=>`${x.mA.toFixed(1)} mA <span class="k">(=(5V−2V)÷${x.tot}Ω)</span>`).join(', ');
+    r.innerHTML=`<span class="k">핀 ${p.out}</span> ${BB.outHigh?'높음 (5V)':'낮음 (0V)'} <span class="k">· 핀 2 읽기</span> ${p.mode==='button'?p2:'—'}${cur?` <span class="k">· LED 전류</span> ${cur}`:''}`; }
+  const w=$('bbwarn'); if(w) w.hidden=!(BB.running&&BB.res&&BB.res.short);
+}
+function bbStage(){
+  const m=curM();
+  const tools=[['look','연결 보기'],['wire','점퍼선'],['res100','저항 100Ω'],['res220','220Ω'],['res1k','1kΩ'],['res10k','10kΩ'],['led','LED'],['btn','버튼'],['erase','지우기']];
+  $('stage').innerHTML=`<div class="shead"><h2>Tinkercad 연습대</h2><span class="note">교육용 단순 모델</span><button class="btn ${BB.running?'danger':'primary'}" data-act="bbsim" style="margin-left:auto">${BB.running?'■ 시뮬레이션 중지':'▶ 시뮬레이션 시작'}</button></div>
+  <div class="toolbar" role="group" aria-label="도구">${tools.map(([k,t])=>`<button class="btn sm" data-act="tool" data-v="${k}" aria-pressed="${BB.tool===k}">${t}</button>`).join('')}<button class="btn sm" data-act="clearbb">${BB.armClear?'한 번 더 눌러 모두 지우기':'모두 지우기'}</button></div>
+  ${BB.tool==='led'?LED_GUIDE:''}
+  <div class="warnbar" id="bbwarn" hidden>합선 경고: 5V(또는 높음 핀)와 GND가 부품 없이 바로 이어졌어요. 실제 보드라면 과열·손상돼요.</div>
+  <div class="svgbox" id="bbbox">${bbSVG()}</div>
+  <div class="readout" id="bbread"></div>
+  ${m.ctrls.includes('press')||PROG.bb.mode==='button'?`<div class="ctrls"><div class="ctrl"><span class="lab">푸시버튼 (시뮬레이션 중 누르고 있기)</span><button class="btn" data-press="1" aria-pressed="${BB.pressed}">버튼 누르기</button></div></div>`:''}`;
+  bbRead();
+}
+
+/* 스마트 휴지통 실험대 */
+function tcSVG(){
+  const ok=tcSensorOk(); const hx=304-TC.hand*5;
+  let s=`<svg id="tcsvg" viewBox="0 0 560 334" role="img" aria-label="스마트 휴지통 모형">`;
+  s+=`<line x1="20" y1="296" x2="540" y2="296" stroke="currentColor" opacity=".35" stroke-width="2"/>`;
+  for(let d=0;d<=50;d+=5){ const x=304-d*5; s+=`<line x1="${x}" y1="300" x2="${x}" y2="${d%10?306:310}" stroke="currentColor" opacity=".55"/>${d%10?'':`<text x="${x}" y="326" text-anchor="middle" class="svgs" fill="currentColor">${d}</text>`}`; }
+  s+=`<text x="330" y="326" class="svgs" fill="currentColor">cm</text>`;
+  s+=`<rect x="24" y="20" width="160" height="64" rx="8" fill="#0e7c86"/><text x="36" y="44" class="svgt" fill="#e8fbfc">Arduino Uno</text><rect x="36" y="56" width="12" height="8" rx="2" fill="${TC.usb&&!TC.hot?'#7dff6a':'#245a3c'}"/><text x="54" y="64" class="svgs" fill="#e8fbfc">ON</text>`;
+  s+= TC.usb ? `<path d="M24 52 H4" stroke="#8a949a" stroke-width="7" stroke-linecap="round"/><text x="70" y="104" class="svgs" fill="currentColor">USB 연결됨</text>` : `<path d="M8 120 H-10" stroke="#8a949a" stroke-width="7" stroke-linecap="round"/><text x="70" y="104" class="svgs" fill="currentColor">USB 분리됨</text>`;
+  s+=`<path d="M330 172 L470 172 L458 296 L342 296 Z" fill="#4f6b5e"/>`;
+  s+=`<g transform="rotate(${TC.angle.toFixed(1)} 470 170)"><rect x="326" y="160" width="148" height="12" rx="4" fill="#33503f"/><rect x="380" y="152" width="40" height="8" rx="3" fill="#33503f"/></g>`;
+  s+=`<rect x="462" y="136" width="34" height="24" rx="4" fill="#2f6fd6"/><text x="479" y="128" text-anchor="middle" class="svgs" fill="currentColor">서보</text>`;
+  if(TC.w.led==='13'){ if(TC.led&&TC.running) s+=`<circle cx="400" cy="236" r="16" fill="#ff5a3c" opacity=".35"/>`; s+=`<circle cx="400" cy="236" r="7" fill="${TC.led&&TC.running?'#ff3b2f':'#6e2b25'}"/>`; }
+  s+=`<rect x="306" y="194" width="28" height="48" rx="4" fill="#1f4fa8" ${TC.hot?'stroke="#ff4b2b" stroke-width="4"':''}/><circle cx="308" cy="206" r="8" fill="#c9ced3" stroke="#6b7177"/><circle cx="308" cy="230" r="8" fill="#c9ced3" stroke="#6b7177"/><text x="320" y="186" text-anchor="middle" class="svgs" fill="currentColor">초음파</text>`;
+  if(TC.hot) s+=[0,1,2].map(i=>`<path d="M${312+i*8} 178 q4 -6 0 -12 q-4 -6 0 -12" fill="none" stroke="#ff4b2b" stroke-width="2"/>`).join('');
+  if(TC.running&&ok) s+=`<line x1="298" y1="218" x2="${hx+4}" y2="218" stroke="#33bfc9" stroke-width="2" stroke-dasharray="5 5"/>`;
+  s+=`<g transform="translate(${hx} 200)"><rect x="-44" y="4" width="32" height="34" rx="9" fill="#f1c27d" stroke="#c48d4b"/>${[6,13,20,27].map(y=>`<rect x="-16" y="${y}" width="16" height="6" rx="3" fill="#f1c27d" stroke="#c48d4b"/>`).join('')}<text x="-28" y="-4" text-anchor="middle" class="svgs" fill="currentColor">손</text></g>`;
+  return s+'</svg>';
+}
+function drawTCInto(){ const b=$('tcbox'); if(b) b.innerHTML=tcSVG(); }
+function tcRead(){
+  const r=$('tcread'); if(!r) return;
+  r.innerHTML = TC.running ? `<span class="k">거리 값</span> ${TC.reading.toFixed(1)} cm <span class="k">· 서보</span> ${Math.round(TC.angle)}° <span class="k">· LED</span> ${TC.w.led==='13'&&TC.led?'켜짐':'꺼짐'}` : `<span class="k">상태</span> ${TC.hot?'과열! USB를 바로 분리해요':TC.usb?'연결됨 · [▶ 시작하기]를 누르면 실행돼요':'USB 분리됨 · 결선해도 안전해요'}`;
+}
+function tcStage(){
+  $('stage').innerHTML=`<div class="shead"><h2>스마트 휴지통</h2><span class="note">Trig 9 · Echo 10 · 서보 6 · LED 13</span>
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn ${TC.usb?'':'primary'}" data-act="usb">${TC.usb?'USB 분리':'USB 연결'}</button><button class="btn ${TC.running?'danger':'primary'}" data-act="tcrun">${TC.running?'■ 정지':'▶ 시작하기'}</button></div></div>
+    <div class="svgbox" id="tcbox" style="color:var(--ink)">${tcSVG()}</div>
+    <div class="readout" id="tcread"></div>
+    <div class="ctrls"><div class="ctrl"><label for="hand">손까지 거리 <span>${TC.hand} cm</span></label><input id="hand" type="range" min="2" max="50" value="${TC.hand}" data-tc="hand"></div></div>
+    <div class="ctrl"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="lab">스마트 휴지통 회로 연결표 (12차시 교재)</span><button class="btn sm" data-act="tctable" aria-expanded="${TC.table}">${TC.table?'연결표 접기':'연결표 보기'}</button></div>
+    ${TC.table?`<div class="tblwrap"><table class="tbl"><thead><tr><th>부품 · 핀</th><th>아두이노 연결</th><th>확인 포인트</th></tr></thead><tbody>
+      <tr><td>공통 전원</td><td>5V → +레일, GND → −레일</td><td>빨강 = 5V, 검정 = GND로 선 색 통일</td></tr>
+      <tr><td>초음파 VCC · GND</td><td>VCC → +레일(5V), GND → −레일</td><td>두 선이 바뀌면 센서가 뜨거워져요</td></tr>
+      <tr><td>초음파 Trig</td><td>디지털 9번</td><td>초음파를 보내는 선</td></tr>
+      <tr><td>초음파 Echo</td><td>디지털 10번</td><td>돌아온 신호를 받는 선 (9번과 바뀌지 않게)</td></tr>
+      <tr><td>서보 빨강 · 갈색</td><td>빨강 → +레일(5V), 갈색 → −레일(GND)</td><td>갈색(GND)을 5V에 꽂지 않기</td></tr>
+      <tr><td>서보 주황(신호)</td><td>디지털 6번</td><td>블록의 핀 번호와 반드시 일치</td></tr>
+      <tr><td>LED</td><td>긴 다리(+) → 13번, 짧은 다리(−) → 220Ω → GND</td><td>보호 저항 220Ω은 (5V−2V)÷20mA = 150Ω 이상이라서</td></tr>
+    </tbody></table></div><p class="anynote">USB를 뺀 상태에서 이 표 순서대로 연결하고, 짝과 한 줄씩 확인한 뒤 USB를 꽂아요.</p>`:''}</div>`;
+  tcRead();
+}
+
+/* 오류 카드 실험대 */
+function errStage(){
+  const c=curM().card;
+  $('stage').innerHTML=`<div class="shead"><h2>오류 카드</h2><span class="note">${curM().code} · ${c.where}</span></div>
+   <div class="ecard"><div class="mhead"><span class="badge">문제 범위: ${c.who}</span><span class="badge">${c.t}</span></div><p class="q">"${c.scene}"</p></div>
+   <div class="sec" style="max-width:620px;margin:6px auto 0;width:100%">오류 대응 4단계</div>
+   <div class="flow"><div><b>1 범위 확인</b>한 명·모둠·반 전체</div><div><b>2 물리 연결</b>케이블·배선·전원·GND</div><div><b>3 소프트웨어 설정</b>브라우저·보드·포트·드라이버</div><div><b>4 코드</b>핀 번호·조건·반복</div></div>
+   <p class="note" style="text-align:center">안전 위험(뜨거움·냄새)이 보이면 순서보다 USB 분리가 먼저예요.</p>`;
+}
+function renderStage(){ ({mb:mbStage,bb:bbStage,tc:tcStage,err:errStage})[S.tab](); }
+function render(){ renderHeader(); renderStage(); renderPanel(); }
+function enterMission(id){ S.cur[S.tab]=id; S.hint=-1; const m=curM(); MB.hi=null; if(S.tab==='mb') MB.side='front'; m.enter?.(); render(); }
+
+/* ---------- 입력 처리 (탭 중심) ---------- */
+document.addEventListener('click',e=>{
+  const ep=e.target.closest('[data-ep]'); if(ep&&S.tab==='bb'){ bbTap(ep.dataset.ep); return; }
+  const part=e.target.closest('#bbsvg [data-part]'); if(part&&BB.tool==='erase'&&!BB.running){ BB.parts=BB.parts.filter(q=>q.id!==+part.dataset.part); drawBBInto(); return; }
+  const mbb=e.target.closest('[data-mbbtn]'); if(mbb){ mbEvent(mbb.dataset.mbbtn); return; }
+  const b=e.target.closest('[data-act]'); if(!b) return;
+  const a=b.dataset.act, v=b.dataset.v;
+  if(a!=='sound') ac();
+  switch(a){
+    case 'tab': S.tab=v; S.hint=-1; curM().enter?.(); render(); break;
+    case 'mission': enterMission(b.dataset.id); break;
+    case 'next': case 'prev': { const order=M.map(m=>m.id); let i=order.indexOf(curM().id)+(a==='next'?1:-1); if(i>=order.length) i=0; if(i<0) i=0; const t=M[i]; S.tab=t.tab; enterMission(t.id); $('panel').scrollTop=0; break; }
+    case 'hint': { const m=curM(); S.hint=(S.hint+1)%m.hints.length; renderPanel(); break; }
+    case 'sound': S.sound=!S.sound; save(); renderHeader(); break;
+    case 'resetall': if(b.dataset.arm){ S.done.clear(); save(); location.reload(); } else { b.dataset.arm='1'; b.textContent='한 번 더 누르면 기록 지우기'; setTimeout(()=>{ b.dataset.arm=''; b.textContent='처음부터'; },3000); } break;
+    case 'cell': { const arr=getVal(b.dataset.path), i=+b.dataset.i; arr[i]=arr[i]?0:1; b.classList.toggle('on',!!arr[i]); b.setAttribute('aria-pressed',!!arr[i]); resetFor(b.dataset.path); check(); break; }
+    case 'icon': { const arr=getVal(b.dataset.path); ICONS[b.dataset.k].forEach((x,i)=>arr[i]=x); resetFor(b.dataset.path); renderPanel(); check(); break; }
+    case 'mbev': mbEvent(v); break;
+    case 'mbmode': MB.mode=v; MB.cover=false; MB.grip=false; EV.mb4={on:false,off:false}; EV.mb7.off=false; mbStage(); break;
+    case 'side': MB.side=v; mbStage(); break;
+    case 'ver': MB.v2=v==='v2'; MB.warnedV1=false; mbStage(); check(); break;
+    case 'cover': MB.cover=!MB.cover; mbStage(); break;
+    case 'grip': MB.grip=!MB.grip; mbStage(); break;
+    case 'clap': MB.clapUntil=performance.now()+420; SND.click(); break;
+    case 'mbhi': { const p=MB0.find(x=>x.k===b.dataset.k); MB.hi=p.k; MB.side=p.side; mbStage(); break; }
+    case 'mb0': { PROG.mb0[b.dataset.k]=v; const p=MB0.find(x=>x.k===b.dataset.k); MB.hi=p.k; MB.side=p.side; v===p.ans?SND.click():SND.bad(); mbStage(); renderPanel(); check(); break; }
+    case 'rec3': { const k=b.dataset.k;
+      if(MB.mode!=='class'){ SND.bad(); toast('[교실 실제 값]으로 바꾼 뒤 재요.'); break; }
+      if(k==='bright'&&MB.cover){ SND.bad(); toast('지금은 손으로 덮은 상태예요. 손을 뗀 뒤 적어요.'); break; }
+      if(k==='dark'&&!MB.cover){ SND.bad(); toast('먼저 [손으로 앞면 LED 덮기]를 눌러요.'); break; }
+      PROG.mb3[k]=Math.round(MB.light); SND.click(); renderPanel(); check(); break; }
+    case 'tool': BB.tool=v; BB.pending=null; if(v!=='look') BB.hi=null; bbStage(); break;
+    case 'bbsim': bbStart(); check(); break;
+    case 'clearbb': if(BB.running){ toast('시뮬레이션을 멈춘 뒤 지워요.'); break; } if(BB.armClear){ BB.parts=[]; BB.armClear=false; bbStage(); } else { BB.armClear=true; bbStage(); setTimeout(()=>{ BB.armClear=false; if(S.tab==='bb') bbStage(); },3000); } break;
+    case 'bbmode': PROG.bb.mode=v; if(BB.running){ BB.t0=performance.now(); } renderPanel(); bbStage(); break;
+    case 'preset': bbPreset(); BB.tool='look'; toast('Button 예제를 불러왔어요. 선을 하나씩 따라가 봐요.'); bbStage(); break;
+    case 'rcolor': PROG.bbR.color=v; SND.click(); renderPanel(); break;
+    case 'rma': PROG.bbR.mA=+v; SND.click(); renderPanel(); break;
+    case 'rpick': PROG.bbR.pick=+v; SND.click(); renderPanel(); break;
+    case 'rwhy': PROG.bbR.why=+b.dataset.i; PROG.bbR.why===0?SND.click():SND.bad(); renderPanel(); check(); break;
+    case 'tctable': TC.table=!TC.table; tcStage(); break;
+    case 'bb1q': PROG.bb1.quiz=v; v==='no'?SND.click():SND.bad(); renderPanel(); check(); break;
+    case 'usb': tcUsb(); check(); break;
+    case 'tcrun': tcRun(); check(); break;
+    case 'tcrepeat': PROG.tc.repeat=!PROG.tc.repeat; EV.tc3={open:false,close:false}; TC.once=false; renderPanel(); check(); break;
+    case 'tcrec': { const d=+b.dataset.d; if(!TC.running){ SND.bad(); toast('USB를 연결하고 [▶ 시작하기]를 먼저 눌러요.'); break; }
+      TC.hand=d; const hs=$('hand'); if(hs){ hs.value=d; hs.previousElementSibling.querySelector('span').textContent=d+' cm'; }
+      setTimeout(()=>{ TC.recs[d]={v:TC.reading.toFixed(1), led:TC.w.led==='13'&&TC.led?'켜짐':'꺼짐', lid:TC.angle>20?'열림':'닫힘', ok:tcSensorOk()&&TC.reading>0.5}; SND.click(); renderPanel(); check(); },450); break; }
+    case 'eans': { const id=curM().id; const st=PROG.err[id]=PROG.err[id]||{}; st[b.dataset.q]=+b.dataset.i; const Q=curM().card[b.dataset.q]; (+b.dataset.i===Q.a)?SND.click():SND.bad(); renderPanel(); check(); break; }
+  }
+});
+function resetFor(path){
+  if(path.startsWith('mb1')) EV.mb1={A:false,B:false};
+  if(path.startsWith('mb2')) EV.mb2={A:false,B:false,AB:false};
+  if(path.startsWith('mb4')) EV.mb4={on:false,off:false};
+  if(path.startsWith('mb5')) EV.mb5={n:0,last:[]};
+  if(path.startsWith('mb6')){ EV.mb6={hot:false,cool:false}; MB.warnedKo=false; }
+  if(path.startsWith('mb7')) EV.mb7={on:false,off:false};
+  if(path.startsWith('tc')){ EV.tc3={open:false,close:false}; }
+}
+function onSet(t){
+  const path=t.dataset.set; let v=t.value; if(t.dataset.num) v = v===''?'':Number(v);
+  if(path==='mb3.th'){ PROG.mb3.th=v; check(); return; }
+  setVal(path,v); resetFor(path);
+  if(path.startsWith('bb.')){ const c=$('bbcode'); if(c) c.innerHTML=hl(arduinoCode()); if(t.tagName==='SELECT') renderPanel(); }
+  else if(t.tagName==='SELECT') renderPanel();
+  check();
+}
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.set&&t.tagName==='INPUT') onSet(t);
+  if(t.dataset.mb){ MB[t.dataset.mb]=Number(t.value); const sp=t.previousElementSibling?.querySelector('span'); if(sp) sp.textContent=t.value+(t.dataset.mb==='simTemp'?'℃':''); }
+  if(t.dataset.tc){ TC.hand=Number(t.value); const sp=t.previousElementSibling?.querySelector('span'); if(sp) sp.textContent=t.value+' cm'; }
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.set&&t.tagName==='SELECT') onSet(t);
+  if(t.dataset.actChange==='seat'){ MB.seat=t.value; PROG.mb3.bright=null; PROG.mb3.dark=null; EV.mb4={on:false,off:false}; if(S.cur.mb==='mb3') renderPanel(); check(); }
+  if(t.dataset.tcw){ const k=t.dataset.tcw;
+    if(TC.usb){ t.value=TC.w[k]; SND.bad(); toast('USB가 꽂힌 채로 선을 옮기면 위험해요. 먼저 [USB 분리]를 눌러요.'); return; }
+    TC.w[k]=t.value; EV.tc1.edit=true; TC.recs={}; check(); }
+});
+/* 푸시버튼: 누르고 있는 동안만 연결 */
+function press(on){ if(BB.pressed===on) return; BB.pressed=on; document.querySelectorAll('button[data-press]').forEach(x=>x.setAttribute('aria-pressed',on)); if(BB.running){ BB.sig=''; } else drawBBInto(); }
+document.addEventListener('pointerdown',e=>{ const p=e.target.closest('[data-press]'); if(p&&S.tab==='bb'&&(BB.tool==='look'||BB.running)){ e.preventDefault(); press(true); } });
+['pointerup','pointercancel'].forEach(ev=>document.addEventListener(ev,()=>press(false)));
+document.addEventListener('keydown',e=>{ if((e.key===' '||e.key==='Enter')&&e.target.matches?.('button[data-press]')){ e.preventDefault(); press(true); } });
+document.addEventListener('keyup',e=>{ if((e.key===' '||e.key==='Enter')&&e.target.matches?.('button[data-press]')) press(false); });
+
+/* ---------- 시작 ---------- */
+curM().enter?.();
+render();
+setInterval(()=>{ const now=performance.now();
+  if(S.tab==='mb'){ mbTick(now); if(['mb4','mb6','mb7'].includes(S.cur.mb)) check(); }
+  else if(S.tab==='bb') bbTick(now);
+  else if(S.tab==='tc') tcTick(now);
+},60);
+</script>
+</body>
+</html>
